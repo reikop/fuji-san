@@ -1,7 +1,7 @@
 name: fuji_san
 description: A native X100VI recipe library and verified USB batch writer.
 publish_to: none
-version: 0.2.2+5
+version: 0.2.3+6
 environment:
   sdk: '>=3.10.0 <4.0.0'
 dependencies:
@@ -19,3 +19,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/update_windows.ps1
+    - assets/builtin_recipes.json

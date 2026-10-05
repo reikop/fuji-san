@@ -1,3 +1,16 @@
+# Built-in recipes
+
+`assets/builtin_recipes.json` holds film simulation settings published by their
+individual creators. Each entry keeps the creator's name and a link to the
+original publication, both shown in the app. The list was compiled from the
+[Fujifilm Film Simulation Recipes Database](https://hpchavaz-photography.blogspot.com/p/fujifims.html)
+maintained by Henri-Pierre Chavaz (export of 2026-10-05), restricted to X-Trans IV
+and X-Trans V entries whose settings could be converted unambiguously by
+`tool/build_builtin_recipes.py`. The database and the original publications carry
+no explicit licence; the recipes remain the work of their creators. Please visit
+and support the original pages. Creators who want an entry removed can open an
+issue.
+
 # Protocol references
 
 Fuji San contains an independently written Dart PTP implementation. Property IDs,

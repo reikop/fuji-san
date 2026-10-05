@@ -64,6 +64,9 @@ jobs:
         if: matrix.target == 'windows'
         shell: powershell
         run: ./tool/test_updater.ps1
+      - name: Verify the app can launch the Windows updater helper
+        if: matrix.target == 'windows'
+        run: flutter test test/updates_test.dart
       - name: Package Windows application
         if: matrix.target == 'windows'
         shell: pwsh

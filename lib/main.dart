@@ -13,6 +13,7 @@ import 'diagnostics.dart';
 import 'updates.dart';
 import 'camera_slot_editor.dart';
 import 'wb_shift_grid.dart';
+import 'builtin_recipes.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 Future<void> main(List<String> arguments) async {
@@ -292,6 +293,27 @@ class _WorkspaceState extends State<Workspace> {
         report('${result.name} 저장됨');
       });
     }
+  }
+
+  Future<void> addBuiltin(Recipe recipe) async {
+    if (!loaded) throw StateError('라이브러리 읽기 오류를 먼저 해결하세요.');
+    final before = recipes;
+    recipes = [
+      ...recipes,
+      Recipe(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: recipe.name,
+        cameraName: recipe.cameraName,
+        values: recipe.values,
+      ),
+    ];
+    try {
+      await save();
+    } catch (_) {
+      recipes = before;
+      rethrow;
+    }
+    report('${recipe.name} 추가됨');
   }
 
   Future<void> reorder(String moved, String target) async {
@@ -855,6 +877,17 @@ class _WorkspaceState extends State<Workspace> {
               onPressed: busy || !loaded ? null : importLibrary,
               icon: const Icon(Icons.file_open_outlined),
               label: const Text('가져오기'),
+            ),
+            OutlinedButton.icon(
+              onPressed: busy || !loaded
+                  ? null
+                  : () => Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (_) => BuiltinCatalog(onAdd: addBuiltin),
+                      ),
+                    ),
+              icon: const Icon(Icons.collections_bookmark_outlined),
+              label: const Text('내장 레시피'),
             ),
           ],
         ),

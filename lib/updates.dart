@@ -5,7 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'storage.dart';
 
-const appRelease = '0.2.2-alpha.1';
+const appRelease = '0.2.3-alpha.1';
 const releasesUrl = 'https://github.com/reikop/fuji-san/releases';
 
 class ReleaseVersion implements Comparable<ReleaseVersion> {
@@ -202,6 +202,9 @@ class UpdateService {
   }
 
   Future<void> launchWindows(Directory job) async {
+    // Not ProcessStartMode.detached: without a console Windows PowerShell exits
+    // before running the script. A normally started helper has a hidden console
+    // and keeps running after this app exits.
     await Process.start('powershell.exe', [
       '-NoProfile',
       '-NonInteractive',
@@ -213,7 +216,7 @@ class UpdateService {
       '${job.path}/updater.ps1',
       '-Manifest',
       '${job.path}/job.json',
-    ], mode: ProcessStartMode.detached);
+    ]);
     for (var i = 0; i < 120; i++) {
       if (await File('${job.path}/error.txt').exists()) {
         throw StateError(await File('${job.path}/error.txt').readAsString());

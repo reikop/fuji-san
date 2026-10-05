@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fuji_san/storage.dart';
 import 'package:fuji_san/updates.dart';
 
 Map<String, dynamic> release(String tag, {bool draft = false}) => {
@@ -78,5 +80,21 @@ void main() {
         );
       }
     },
+  );
+  test(
+    'Windows helper launched by the app actually runs and signals ready',
+    () async {
+      final job = await Directory.systemTemp.createTemp('fuji-launch-test-');
+      addTearDown(() => job.delete(recursive: true));
+      await File('${job.path}/updater.ps1').writeAsString(
+        r'''param([string]$Manifest)
+[IO.File]::WriteAllText((Join-Path (Split-Path -Parent $Manifest) 'ready'), 'ready')
+''',
+      );
+      await File('${job.path}/job.json').writeAsString('{}');
+      await UpdateService(LibraryStore()).launchWindows(job);
+      expect(File('${job.path}/ready').existsSync(), true);
+    },
+    skip: !Platform.isWindows,
   );
 }
