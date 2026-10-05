@@ -26,6 +26,34 @@ class FakeCamera implements RecipeCamera {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('malformed native responses invalidate the session', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    var closed = false;
+    messenger.setMockMethodCallHandler(NativeTransport.channel, (call) async {
+      if (call.method == 'connect') return {'managedSession': true};
+      if (call.method == 'transaction') {
+        return {'response': Uint8List(3), 'data': Uint8List(0)};
+      }
+      if (call.method == 'disconnect') closed = true;
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(NativeTransport.channel, null),
+    );
+    final t = NativeTransport();
+    await t.open('camera');
+    await expectLater(
+      t.command(0x1015, params: [0xd190]),
+      throwsFormatException,
+    );
+    expect(t.opened, false);
+    expect(closed, true);
+    await expectLater(
+      t.command(0x1016, params: [0xd190], outgoing: u16(100)),
+      throwsStateError,
+    );
+  });
   test(
     'batch persists backup before first write and stops after failure',
     () async {

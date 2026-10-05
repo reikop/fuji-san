@@ -14,6 +14,15 @@ void main() {
   for (final size in [const Size(390, 844), const Size(1440, 1000)]) {
     testWidgets('review $size', (tester) async {
       final font = File('C:/Windows/Fonts/malgun.ttf');
+      final icons = File(
+        '.tools/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+      );
+      if (icons.existsSync()) {
+        await (FontLoader('MaterialIcons')..addFont(
+              Future.value(ByteData.sublistView(icons.readAsBytesSync())),
+            ))
+            .load();
+      }
       if (font.existsSync()) {
         final loader = FontLoader('Roboto')
           ..addFont(Future.value(ByteData.sublistView(font.readAsBytesSync())));
@@ -56,15 +65,15 @@ void main() {
       await tester.pumpAndSettle();
       final boundary =
           key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-      final image = await boundary.toImage();
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
       await tester.runAsync(() async {
+        final image = await boundary.toImage();
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
         await Directory('.tools').create(recursive: true);
         await File(
           '.tools/preview-${size.width.toInt()}.png',
         ).writeAsBytes(data!.buffer.asUint8List());
+        image.dispose();
       });
-      image.dispose();
     });
   }
 }

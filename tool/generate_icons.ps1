@@ -33,6 +33,7 @@ foreach ($pair in @(@('mdpi',48),@('hdpi',72),@('xhdpi',96),@('xxhdpi',144),@('x
     Write-IconPng (Join-Path $project "android/app/src/main/res/mipmap-$($pair[0])/ic_launcher.png") $pair[1]
 }
 $pngPath = Join-Path $project '.tools/icon-256.png'
+[IO.Directory]::CreateDirectory((Split-Path -Parent $pngPath)) | Out-Null
 Write-IconPng $pngPath 256
 $png = [IO.File]::ReadAllBytes($pngPath)
 $stream = [IO.File]::Create((Join-Path $project 'windows/runner/resources/app_icon.ico'))

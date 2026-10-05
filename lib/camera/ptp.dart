@@ -199,8 +199,24 @@ class NativeTransport implements CameraTransport {
         );
       }
       return data;
+    } on PlatformException {
+      await _invalidate();
+      rethrow;
+    } on FormatException {
+      await _invalidate();
+      rethrow;
     } finally {
       _busy = false;
+    }
+  }
+
+  Future<void> _invalidate() async {
+    opened = false;
+    _buffer = Uint8List(0);
+    try {
+      await channel.invokeMethod<void>('disconnect');
+    } catch (_) {
+      /* Already removed. */
     }
   }
 }

@@ -101,6 +101,7 @@ class _WorkspaceState extends State<Workspace> {
       await action();
     } catch (e) {
       report('완료하지 못했습니다: $e');
+      if (!transport.opened) camera.identity = null;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$e'), duration: const Duration(seconds: 8)),
@@ -535,7 +536,7 @@ class _WorkspaceState extends State<Workspace> {
       ListTile(
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.ios_share),
-        title: const Text('라이브러리 내보내기'),
+        title: const Text('레시피 내보내기'),
         onTap: busy ? null : () => copyJson('레시피 JSON', exportRecipes(recipes)),
       ),
       ListTile(

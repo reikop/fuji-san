@@ -12,6 +12,7 @@ final class FujiUsb: NSObject, ICDeviceBrowserDelegate, ICDeviceDelegate {
     private var cameras: [String: ICCameraDevice] = [:]
     private var selected: ICCameraDevice?
     private var opening: FlutterResult?
+    private var openingID = UUID()
     private var pending: FlutterResult?
     private var requestID = UUID()
     private var channel: FlutterMethodChannel?
@@ -46,9 +47,10 @@ final class FujiUsb: NSObject, ICDeviceBrowserDelegate, ICDeviceDelegate {
                 result(FlutterError(code: "device", message: "Camera missing or session already open.", details: nil)); return
             }
             selected = camera; opening = result; camera.delegate = self
+            let openID = UUID(); openingID = openID
             camera.requestOpenSession()
             DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in
-                guard let self = self, let finish = self.opening else { return }
+                guard let self = self, self.openingID == openID, let finish = self.opening else { return }
                 self.opening = nil; self.selected?.requestCloseSession(); self.selected = nil
                 finish(FlutterError(code: "timeout", message: "Camera session timed out. Reconnect USB.", details: nil))
             }

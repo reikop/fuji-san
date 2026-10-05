@@ -4,6 +4,12 @@
 macOS, Android, iOS 화면을 공유하고 각 OS의 네이티브 USB API로 연결합니다.
 브라우저, WebUSB, 계정, 서버가 필요하지 않습니다.
 
+![Desktop recipe workspace](docs/desktop.png)
+
+<img src="docs/mobile.png" alt="Mobile recipe library" width="300" />
+
+화면 예시의 레시피는 UI 검토용 데이터이며 앱에 기본 제공되는 검증된 레시피가 아닙니다.
+
 > **Experimental 0.1 — 실기기 검증 전.** 레시피 관리, 네이티브 USB 연결 코드,
 > 백업 및 검증을 포함한 일괄 쓰기가 구현되어 있습니다. 빌드 성공은 실제
 > 카메라 호환성 검증을 의미하지 않습니다. 아직 모든 OS에서 전송이 검증된
