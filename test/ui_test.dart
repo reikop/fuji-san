@@ -44,6 +44,14 @@ void main() {
       await tester.tap(find.text('Seoul Walk · Classic Chrome'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.text('1개 슬롯 일괄 적용'),
+        200,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('camera-kit')),
+          matching: find.byType(Scrollable),
+        ),
+      );
       expect(find.text('1개 슬롯 일괄 적용'), findsOneWidget);
       expect((store.data!['recipes'] as List).single['name'], 'Seoul Walk');
       expect((store.data!['slots'] as Map).length, 1);

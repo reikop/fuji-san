@@ -12,6 +12,21 @@ class Snapshot {
   Snapshot(this.slot, this.properties);
   final int slot;
   final Map<int, Uint8List> properties;
+  String get name {
+    final name = Reader(properties[0xd18d]!).string().trim();
+    return name.isEmpty ? '이름 없는 레시피' : name;
+  }
+
+  Map<int, int> get values => {
+    for (final s in settings)
+      s.id: s.id == 0xd195 && Reader(properties[s.id]!).read16() == 6
+          ? 1
+          : s.signed
+          ? ByteData.sublistView(properties[s.id]!).getInt16(0, Endian.little)
+          : Reader(properties[s.id]!).read16(),
+  };
+
+  String get film => filmNames[values[0xd192]] ?? '알 수 없는 필름';
   Map<String, dynamic> toJson() => {
     'slot': slot,
     'properties': properties.map(
@@ -116,9 +131,16 @@ class FujiCamera implements RecipeCamera {
       }
     } finally {
       await set(0xd18c, original);
+      if (!_same(await read(0xd18c), original)) {
+        throw StateError('원래 C 슬롯을 복원하지 못했습니다. 카메라에서 확인하세요.');
+      }
     }
     return result;
   }
+
+  bool _same(Uint8List a, Uint8List b) =>
+      a.length == b.length &&
+      List.generate(a.length, (i) => a[i] == b[i]).every((v) => v);
 
   Future<void> _validateDescriptor(int id, Uint8List bytes) async {
     if (_knownSchemaOnly) {

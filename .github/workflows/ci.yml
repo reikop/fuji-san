@@ -1,6 +1,7 @@
 name: Native builds
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -59,6 +60,10 @@ jobs:
           channel: stable
       - run: flutter pub get
       - run: ${{ matrix.command }}
+      - name: Verify Windows updater recovery and archive validation
+        if: matrix.target == 'windows'
+        shell: powershell
+        run: ./tool/test_updater.ps1
       - name: Package Windows application
         if: matrix.target == 'windows'
         shell: pwsh

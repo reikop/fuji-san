@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_selector/file_selector.dart';
@@ -8,11 +9,16 @@ import 'camera/ptp.dart';
 import 'domain/recipe.dart';
 import 'storage.dart';
 import 'diagnostics.dart';
+import 'updates.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
   if (arguments.length == 2 && arguments.first == '--diagnose-camera') {
     exit(await diagnoseCamera(arguments[1]));
+  }
+  if (arguments.length == 2 && arguments.first == '--diagnose-slots') {
+    exit(await diagnoseCamera(arguments[1], scanSlots: true));
   }
   runApp(const FujiSanApp());
 }
@@ -59,6 +65,12 @@ class _WorkspaceState extends State<Workspace> {
   late final FujiCamera camera = FujiCamera(transport);
   List<Recipe> recipes = [];
   Map<int, String> slots = {};
+  Map<int, Snapshot> cameraSlots = {};
+  DateTime? slotsReadAt;
+  AppRelease? update;
+  bool checkingUpdate = false;
+  String updateStatus = '시작할 때 자동 확인';
+  Timer? updateTimer;
   bool busy = true, loaded = false;
   String status = '라이브러리를 여는 중', query = '';
   int page = 0;
@@ -66,6 +78,128 @@ class _WorkspaceState extends State<Workspace> {
   void initState() {
     super.initState();
     _load();
+    if (widget.store == null) {
+      checkUpdates();
+      updateTimer = Timer.periodic(
+        const Duration(hours: 6),
+        (_) => checkUpdates(),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    updateTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> checkUpdates() async {
+    if (checkingUpdate) return;
+    setState(() => checkingUpdate = true);
+    try {
+      final found = await UpdateService(store).check();
+      if (!mounted) return;
+      setState(() {
+        update = found;
+        updateStatus = found == null ? '최신 버전입니다' : '${found.tag} 업데이트 가능';
+      });
+    } catch (_) {
+      if (mounted) setState(() => updateStatus = '확인 실패 · 눌러서 다시 확인');
+    } finally {
+      if (mounted) setState(() => checkingUpdate = false);
+    }
+  }
+
+  Future<void> installUpdate() async {
+    final release = update;
+    if (release == null || busy) return;
+    if (!Platform.isWindows) {
+      await run(() async {
+        if (!await launchUrl(
+          release.page,
+          mode: LaunchMode.externalApplication,
+        )) {
+          throw StateError('배포 페이지를 열 수 없습니다: ${release.page}');
+        }
+      });
+      return;
+    }
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${release.tag} 업데이트'),
+        content: const Text('새 버전을 다운로드·검증한 뒤 앱을 재시작합니다. 라이브러리와 백업은 유지됩니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('나중에'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('업데이트 후 재시작'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    await run(() async {
+      final service = UpdateService(store);
+      final job = await service.prepareWindows(release, report);
+      await service.launchWindows(job);
+      if (transport.opened) await transport.close();
+      await File('${job.path}/commit').writeAsString('install', flush: true);
+      exit(0);
+    });
+  }
+
+  Future<void> refreshSlots() async {
+    cameraSlots = {};
+    slotsReadAt = null;
+    report('카메라 C1–C7 레시피를 읽는 중');
+    final snapshots = await camera.backup({1, 2, 3, 4, 5, 6, 7});
+    cameraSlots = {for (final s in snapshots) s.slot: s};
+    slotsReadAt = DateTime.now();
+    report('카메라 C1–C7 읽기 완료 · 원래 슬롯 복원됨');
+  }
+
+  Future<void> showCameraSlot(int slot) async {
+    final snapshot = cameraSlots[slot]!;
+    final values = snapshot.values;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('C$slot · ${snapshot.name}'),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('카메라에서 읽은 설정', style: TextStyle(color: green)),
+                for (final setting in settings)
+                  if (applicable(setting.id, values))
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(setting.label),
+                      trailing: Text(
+                        setting.accepts(values[setting.id]!)
+                            ? setting.display(values[setting.id]!)
+                            : '알 수 없는 값 (${values[setting.id]})',
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('닫기'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _load() async {
@@ -105,7 +239,11 @@ class _WorkspaceState extends State<Workspace> {
       await action();
     } catch (e) {
       report('완료하지 못했습니다: $e');
-      if (!transport.opened) camera.identity = null;
+      if (!transport.opened) {
+        camera.identity = null;
+        cameraSlots = {};
+        slotsReadAt = null;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$e'), duration: const Duration(seconds: 8)),
@@ -155,6 +293,8 @@ class _WorkspaceState extends State<Workspace> {
       if (transport.opened) {
         await transport.close();
         camera.identity = null;
+        cameraSlots = {};
+        slotsReadAt = null;
         report('카메라 연결 해제');
         return;
       }
@@ -193,6 +333,7 @@ class _WorkspaceState extends State<Workspace> {
         camera.identity = null;
         rethrow;
       }
+      await refreshSlots();
     });
   }
 
@@ -337,8 +478,11 @@ class _WorkspaceState extends State<Workspace> {
         await BatchWriter(camera).apply(plan, (snapshots) async {
           await store.backup(camera.identity!, snapshots);
         }, report);
+        await refreshSlots();
         report('${plan.length}개 슬롯 적용 및 읽기 검증 완료');
       } catch (e) {
+        cameraSlots = {};
+        slotsReadAt = null;
         throw StateError('전송 중단. 일부 설정이 적용되었을 수 있습니다. 백업 메뉴에서 복원하세요. $e');
       }
     });
@@ -418,9 +562,12 @@ class _WorkspaceState extends State<Workspace> {
       );
       for (final s in snapshots) {
         report('C${s.slot} 복원 중');
+        cameraSlots = {};
+        slotsReadAt = null;
         await camera.restore(s);
       }
       report('백업 복원 및 검증 완료');
+      await refreshSlots();
     });
   }
 
@@ -448,6 +595,12 @@ class _WorkspaceState extends State<Workspace> {
           ),
         ),
         actions: [
+          if (update != null)
+            IconButton(
+              tooltip: '${update!.tag} 업데이트',
+              onPressed: busy ? null : installUpdate,
+              icon: const Icon(Icons.system_update_alt),
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: FilledButton.tonalIcon(
@@ -564,6 +717,24 @@ class _WorkspaceState extends State<Workspace> {
               }),
       ),
       const Divider(height: 48),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.system_update_alt),
+        title: Text(checkingUpdate ? '새 버전 확인 중' : '앱 업데이트'),
+        subtitle: Text(updateStatus),
+        onTap: checkingUpdate || busy ? null : checkUpdates,
+      ),
+      if (update != null)
+        FilledButton.tonal(
+          onPressed: busy ? null : installUpdate,
+          child: Text(Platform.isWindows ? '업데이트 후 재시작' : '새 버전 배포 페이지'),
+        ),
+      if (!Platform.isWindows)
+        const Text(
+          '새 버전은 자동 확인합니다. 설치는 OS별 배포 절차를 따릅니다.',
+          style: TextStyle(fontSize: 11),
+        ),
+      const SizedBox(height: 20),
       const Text('연결 안내', style: TextStyle(fontWeight: FontWeight.bold)),
       const SizedBox(height: 12),
       const Text(
@@ -572,7 +743,7 @@ class _WorkspaceState extends State<Workspace> {
       ),
       const SizedBox(height: 24),
       const Text(
-        'v0.1.1 · Experimental\nWindows 실기기 읽기 확인 · 쓰기 미검증\nFUJIFILM 비공식 오픈소스 앱',
+        'v$appRelease · Experimental\nWindows 실기기 읽기 확인 · 쓰기 미검증\nFUJIFILM 비공식 오픈소스 앱',
         style: TextStyle(fontSize: 11, color: Colors.black54),
       ),
     ],
@@ -786,6 +957,7 @@ class _WorkspaceState extends State<Workspace> {
     ),
   );
   Widget kit() => ListView(
+    key: const ValueKey('camera-kit'),
     padding: const EdgeInsets.all(24),
     children: [
       const Text(
@@ -804,10 +976,24 @@ class _WorkspaceState extends State<Workspace> {
       ),
       const SizedBox(height: 8),
       const Text(
-        '빈 슬롯은 카메라 설정을 유지합니다.',
+        '카메라의 현재 설정과 전송 대기 레시피입니다. 배치하지 않은 슬롯은 유지합니다.',
         style: TextStyle(fontSize: 12, color: Colors.black54),
       ),
       const SizedBox(height: 24),
+      OutlinedButton.icon(
+        onPressed: busy || camera.identity == null
+            ? null
+            : () => run(refreshSlots),
+        icon: const Icon(Icons.refresh, size: 16),
+        label: const Text('카메라 C1–C7 새로고침'),
+      ),
+      Text(
+        slotsReadAt == null
+            ? '카메라 연결 후 현재 레시피를 읽습니다.'
+            : '마지막 읽기 ${slotsReadAt!.hour.toString().padLeft(2, '0')}:${slotsReadAt!.minute.toString().padLeft(2, '0')}',
+        style: const TextStyle(fontSize: 11, color: Colors.black54),
+      ),
+      const SizedBox(height: 12),
       for (var slot = 1; slot <= 7; slot++)
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
@@ -825,16 +1011,26 @@ class _WorkspaceState extends State<Workspace> {
                 ),
               ),
               title: Text(
-                assigned(slot)?.name ?? '레시피 배치',
+                cameraSlots[slot]?.name ?? assigned(slot)?.name ?? '레시피 배치',
                 style: const TextStyle(fontSize: 13),
               ),
-              subtitle: assigned(slot) == null
-                  ? null
-                  : Text(
-                      assigned(slot)!.film,
-                      style: const TextStyle(fontSize: 10),
+              subtitle: Text(
+                [
+                  if (cameraSlots[slot] != null)
+                    '카메라 · ${cameraSlots[slot]!.film}',
+                  if (assigned(slot) != null) '전송 대기 → ${assigned(slot)!.name}',
+                  if (assigned(slot) == null && cameraSlots[slot] != null)
+                    '누르면 교체할 레시피 배치',
+                ].join('\n'),
+                style: const TextStyle(fontSize: 10),
+              ),
+              trailing: cameraSlots[slot] == null
+                  ? const Icon(Icons.add, size: 16)
+                  : IconButton(
+                      tooltip: '카메라 설정 보기',
+                      icon: const Icon(Icons.info_outline, size: 18),
+                      onPressed: busy ? null : () => showCameraSlot(slot),
                     ),
-              trailing: const Icon(Icons.add, size: 16),
             ),
           ),
         ),

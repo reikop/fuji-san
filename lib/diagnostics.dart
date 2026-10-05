@@ -2,11 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'camera/camera.dart';
 import 'camera/ptp.dart';
+import 'updates.dart';
 
 // Uses the exact app transport and model checks, but never changes camera state.
-Future<int> diagnoseCamera(String outputPath) async {
+Future<int> diagnoseCamera(String outputPath, {bool scanSlots = false}) async {
   final transport = NativeTransport();
-  final report = <String, dynamic>{'appVersion': '0.1.1', 'readOnly': true};
+  final report = <String, dynamic>{
+    'appVersion': appRelease,
+    'recipeWrites': false,
+    'scanSlots': scanSlots,
+  };
   var code = 0;
   try {
     final devices = await transport.discover();
@@ -24,6 +29,22 @@ Future<int> diagnoseCamera(String outputPath) async {
     report['firmware'] = camera.identity!.firmware;
     report['currentSlot'] = Reader(await camera.read(0xd18c)).read16();
     report['filmSimulation'] = Reader(await camera.read(0xd192)).read16();
+    if (scanSlots) {
+      final snapshots = await camera.backup({1, 2, 3, 4, 5, 6, 7});
+      report['slots'] = [
+        for (final s in snapshots)
+          {
+            'slot': s.slot,
+            'name': s.name,
+            'film': s.film,
+            'values': s.values.map((k, v) => MapEntry(k.toRadixString(16), v)),
+          },
+      ];
+      report['restoredSlot'] = Reader(await camera.read(0xd18c)).read16();
+      if (report['restoredSlot'] != report['currentSlot']) {
+        throw StateError('Slot was not restored');
+      }
+    }
     report['success'] = true;
   } catch (e) {
     report['success'] = false;
