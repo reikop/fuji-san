@@ -1,0 +1,22 @@
+name: Windows WPD diagnostic
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'windows/runner/wpd_*'
+      - '.github/workflows/windows-probe.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - shell: cmd
+        run: cl /nologo /std:c++17 /EHsc /W4 /WX /DNOMINMAX /DUNICODE /D_UNICODE windows\runner\wpd_probe.cpp windows\runner\wpd_camera.cpp /Fe:fuji-san-wpd-probe.exe /link ole32.lib portabledeviceguids.lib propsys.lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fuji-san-wpd-probe
+          path: fuji-san-wpd-probe.exe
