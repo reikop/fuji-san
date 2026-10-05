@@ -27,7 +27,7 @@ CI (`.github/workflows/ci.yml`) runs exactly the five checks above, then builds 
 
 - `./tool/test_updater.ps1` — exercises `assets/update_windows.ps1` (install, hash rejection, zip traversal rejection, rollback) with fixture apps. Runs under Windows PowerShell 5.1 in CI.
 - `flutter test tool/preview_test.dart` — local only; renders 390- and 1440-wide screenshots to `.tools/preview-*.png`.
-- `fuji_san.exe --diagnose-camera out.json` / `--diagnose-slots out.json` — headless diagnostics through the same transport and model checks as the app (`lib/diagnostics.dart`). The first is read-only; the second cycles through C1–C7 and restores the original slot.
+- `fuji_san.exe --diagnose-camera out.json` / `--diagnose-slots out.json` — headless diagnostics through the same transport and model checks as the app (`lib/diagnostics.dart`). The first is read-only; the second cycles through C1–C7 and restores the original slot. `--diagnose-write-back out.json` rewrites every slot's own values and records the camera's response to each write, changing nothing.
 - `windows-probe.yml` builds `wpd_probe.cpp` + `wpd_camera.cpp` standalone with `cl /W4 /WX`, so `wpd_camera.*` must stay free of Flutter dependencies and warning-clean.
 
 ## Architecture
@@ -61,6 +61,8 @@ These are the safety design of the app; preserve them when changing camera code.
 - A backup is read and durably persisted to disk before any write (`BatchWriter.apply`, `editSlot`). `editSlot` also re-reads the slot and aborts if it changed since the editor opened.
 - Each value is validated before being set — against the camera's property descriptor (`0x1014`), or against the `settings` table when descriptors are unavailable — and every written property is read back and compared.
 - The descriptor fallback is deliberately narrow: only X100VI firmware `1.32` returning `0x2002` for `0x1014`. Other descriptor errors must still fail.
+- Dynamic Range Auto is `0xFFFF` (65535) on the wire: an X100VI 1.32 stores it that way, accepts it, and refuses `0` with `0x201C`. `Recipe.fromJson` migrates the old `0`.
+- The camera answers `0x201C` (invalid value) to writes of properties that do not apply to the slot's state, even with the value it already holds: mono tints for colour films, colour for mono films, Kelvin unless WB is Kelvin. This matches `applicable()`. `_write` tolerates a refused write only when the slot already holds the value, and names the property otherwise.
 - Grain "Off" is written as `1` but reads back as `6`; `Snapshot.values`, the write verification, and `restore` all special-case this.
 - Batch apply is sequential, stops at the first failure, and never rolls back automatically; restore is a manual user action from saved backups.
 - Unknown properties (image size, quality, etc.) are never written.

@@ -17,7 +17,7 @@ void main() {
     'edits only changed fields, preserving unknown values, other slots and selector',
     () async {
       final fixture = CameraFixture()..descriptorsUnavailable = true;
-      fixture.slots[1]![0xd190] = u16(65535);
+      fixture.slots[1]![0xd190] = u16(300);
       final cam = camera(fixture);
       final original = (await cam.backup({1})).single;
       var backedUp = false;
@@ -26,13 +26,13 @@ void main() {
         SlotEdit('Updated', {...original.values, 0xd19a: 3}),
         (snapshots) async {
           expect(fixture.written, isEmpty);
-          expect(snapshots.single.properties[0xd190], u16(65535));
+          expect(snapshots.single.properties[0xd190], u16(300));
           backedUp = true;
         },
       );
       expect(backedUp, true);
       expect(fixture.written, [0xd19a, 0xd18d]);
-      expect(fixture.slots[1]![0xd190], u16(65535));
+      expect(fixture.slots[1]![0xd190], u16(300));
       expect(fixture.slots[2]![0xd18d], ptpString('Original 2'));
       expect(fixture.selected, 4);
     },
@@ -87,7 +87,7 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
         final fixture = CameraFixture();
-        fixture.slots[1]![0xd190] = u16(65535);
+        fixture.slots[1]![0xd190] = u16(300);
         final snapshot = Snapshot(1, fixture.slots[1]!);
         SlotEdit? submitted;
         await tester.pumpWidget(
@@ -103,12 +103,12 @@ void main() {
         );
         expect(find.text('Original 1'), findsOneWidget);
         expect(find.text('Classic Chrome'), findsOneWidget);
-        expect(find.text('현재 값 65535 · 유지'), findsOneWidget);
+        expect(find.text('현재 값 300 · 유지'), findsOneWidget);
         await tester.enterText(find.byType(TextField), 'New Name');
         await tester.tap(find.text('카메라에 저장'));
         await tester.pumpAndSettle();
         expect(submitted!.name, 'New Name');
-        expect(submitted!.values[0xd190], 65535);
+        expect(submitted!.values[0xd190], 300);
         expect(find.text('New Name'), findsOneWidget);
         expect(find.textContaining('연결 오류'), findsOneWidget);
         expect(tester.takeException(), isNull);

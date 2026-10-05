@@ -157,7 +157,7 @@ class _BuiltinCatalogState extends State<BuiltinCatalog> {
   static int drKey(Map<int, int> v) => v[0xd191] != 0 ? -1 : v[0xd190]!;
   static String drLabel(int key) => key < 0
       ? 'DR 우선'
-      : key == 0
+      : key == 65535
       ? 'DR Auto'
       : 'DR$key';
 

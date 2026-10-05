@@ -62,7 +62,8 @@ const settings = <Setting>[
     0xd190,
     '다이내믹 레인지',
     100,
-    options: {0: 'Auto', 100: 'DR100', 200: 'DR200', 400: 'DR400'},
+    // A real X100VI 1.32 stores and accepts Auto as 0xFFFF and refuses 0.
+    options: {65535: 'Auto', 100: 'DR100', 200: 'DR200', 400: 'DR400'},
   ),
   Setting(
     0xd193,
@@ -232,9 +233,11 @@ class Recipe {
     id: json['id'] as String,
     name: json['name'] as String,
     cameraName: json['cameraName'] as String,
-    values: (json['values'] as Map<String, dynamic>).map(
-      (k, v) => MapEntry(int.parse(k, radix: 16), v as int),
-    ),
+    values: (json['values'] as Map<String, dynamic>).map((k, v) {
+      final id = int.parse(k, radix: 16);
+      // Files saved before 0.2.6 stored Dynamic Range Auto as 0.
+      return MapEntry(id, id == 0xd190 && v == 0 ? 65535 : v as int);
+    }),
   );
   static Recipe fresh() => Recipe(
     id: DateTime.now().microsecondsSinceEpoch.toString(),

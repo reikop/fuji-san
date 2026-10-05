@@ -108,7 +108,7 @@ def parse(base, settings):
     if m:
         if len(set(re.findall(r"auto|100|200|400", m.string))) > 1:
             raise Skip("dynamic range")
-        v[0xD190] = 0 if m.group(1) == "auto" else int(m.group(1))
+        v[0xD190] = 65535 if m.group(1) == "auto" else int(m.group(1))
     elif v[0xD191] == 0:
         raise Skip("dynamic range")
     else:

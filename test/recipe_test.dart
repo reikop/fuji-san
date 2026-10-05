@@ -66,4 +66,15 @@ void main() {
       throwsFormatException,
     );
   });
+  test(
+    'Dynamic Range Auto uses the camera encoding and migrates old files',
+    () {
+      final dr = settings.firstWhere((s) => s.id == 0xd190);
+      expect(dr.accepts(65535), true);
+      expect(dr.accepts(0), false);
+      final json = Recipe.fresh().toJson();
+      (json['values'] as Map)['d190'] = 0;
+      expect(Recipe.fromJson(json).values[0xd190], 65535);
+    },
+  );
 }
