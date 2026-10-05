@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'camera/camera.dart';
@@ -11,6 +12,7 @@ import 'storage.dart';
 import 'diagnostics.dart';
 import 'updates.dart';
 import 'camera_slot_editor.dart';
+import 'wb_shift_grid.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 Future<void> main(List<String> arguments) async {
@@ -75,6 +77,10 @@ class _WorkspaceState extends State<Workspace> {
   bool busy = true, loaded = false;
   String status = '라이브러리를 여는 중', query = '';
   int page = 0;
+  final libraryKey = GlobalKey();
+  final libraryScroll = ScrollController();
+  Timer? dragScroll;
+  double? dragY;
   @override
   void initState() {
     super.initState();
@@ -91,6 +97,8 @@ class _WorkspaceState extends State<Workspace> {
   @override
   void dispose() {
     updateTimer?.cancel();
+    dragScroll?.cancel();
+    libraryScroll.dispose();
     super.dispose();
   }
 
@@ -271,7 +279,10 @@ class _WorkspaceState extends State<Workspace> {
     if (result != null) {
       await run(() async {
         final before = List<Recipe>.from(recipes);
-        recipes = [...recipes.where((r) => r.id != result.id), result];
+        final index = recipes.indexWhere((r) => r.id == result.id);
+        recipes = index < 0
+            ? [...recipes, result]
+            : (List.of(recipes)..[index] = result);
         try {
           await save();
         } catch (_) {
@@ -281,6 +292,57 @@ class _WorkspaceState extends State<Workspace> {
         report('${result.name} 저장됨');
       });
     }
+  }
+
+  Future<void> reorder(String moved, String target) async {
+    await run(() async {
+      final from = recipes.indexWhere((r) => r.id == moved);
+      final to = recipes.indexWhere((r) => r.id == target);
+      if (from < 0 || to < 0 || from == to) return;
+      final before = recipes;
+      final next = List.of(recipes);
+      next.insert(to, next.removeAt(from));
+      recipes = next;
+      try {
+        await save();
+      } catch (_) {
+        recipes = before;
+        rethrow;
+      }
+      report('레시피 순서 저장됨');
+    });
+  }
+
+  // Draggable does not scroll its ancestors, so keep the list moving while a
+  // dragged card is held near the top or bottom edge.
+  void startDragScroll() {
+    dragScroll?.cancel();
+    dragScroll = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      final y = dragY;
+      final box = libraryKey.currentContext?.findRenderObject() as RenderBox?;
+      if (y == null || box == null || !libraryScroll.hasClients) return;
+      final top = box.localToGlobal(Offset.zero).dy + 80;
+      final bottom = top + box.size.height - 160;
+      final delta = y < top
+          ? y - top
+          : y > bottom
+          ? y - bottom
+          : 0.0;
+      if (delta == 0) return;
+      final position = libraryScroll.position;
+      position.jumpTo(
+        (position.pixels + delta.clamp(-80, 80) * 0.25).clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        ),
+      );
+    });
+  }
+
+  void stopDragScroll() {
+    dragScroll?.cancel();
+    dragScroll = null;
+    dragY = null;
   }
 
   Future<void> connect() async {
@@ -751,6 +813,8 @@ class _WorkspaceState extends State<Workspace> {
         )
         .toList();
     return ListView(
+      key: libraryKey,
+      controller: libraryScroll,
       padding: const EdgeInsets.all(28),
       children: [
         const Text(
@@ -803,6 +867,14 @@ class _WorkspaceState extends State<Workspace> {
           ),
         ),
         const SizedBox(height: 24),
+        if (filtered.length > 1)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              '카드를 끌어 다른 카드 위에 놓으면 순서가 바뀝니다. 터치 화면에서는 길게 누른 뒤 끌어주세요.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ),
         if (filtered.isEmpty)
           Container(
             padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
@@ -841,13 +913,66 @@ class _WorkspaceState extends State<Workspace> {
                       width: c.maxWidth >= 520
                           ? (c.maxWidth - 16) / 2
                           : c.maxWidth,
-                      child: recipeCard(r),
+                      child: reorderableCard(
+                        r,
+                        c.maxWidth >= 520 ? (c.maxWidth - 16) / 2 : c.maxWidth,
+                      ),
                     ),
                   )
                   .toList(),
             ),
           ),
       ],
+    );
+  }
+
+  Widget reorderableCard(Recipe r, double width) {
+    final card = recipeCard(r);
+    final feedback = Opacity(
+      opacity: 0.85,
+      child: SizedBox(width: width, child: card),
+    );
+    final placeholder = Opacity(opacity: 0.3, child: card);
+    final drags = busy || !loaded ? 0 : 1;
+    // A mouse drags immediately; touch needs a long press so the list can scroll.
+    final mouse = const {
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+    }.contains(defaultTargetPlatform);
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) => details.data != r.id,
+      onAcceptWithDetails: (details) => reorder(details.data, r.id),
+      builder: (context, candidates, _) => DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          border: candidates.isEmpty
+              ? null
+              : Border.all(color: green, width: 2),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: mouse
+            ? Draggable<String>(
+                data: r.id,
+                maxSimultaneousDrags: drags,
+                feedback: feedback,
+                childWhenDragging: placeholder,
+                onDragStarted: startDragScroll,
+                onDragUpdate: (d) => dragY = d.globalPosition.dy,
+                onDragEnd: (_) => stopDragScroll(),
+                child: card,
+              )
+            : LongPressDraggable<String>(
+                data: r.id,
+                maxSimultaneousDrags: drags,
+                feedback: feedback,
+                childWhenDragging: placeholder,
+                onDragStarted: startDragScroll,
+                onDragUpdate: (d) => dragY = d.globalPosition.dy,
+                onDragEnd: (_) => stopDragScroll(),
+                child: card,
+              ),
+      ),
     );
   }
 
@@ -1121,11 +1246,20 @@ class _RecipeEditorState extends State<RecipeEditor> {
               ),
             const SizedBox(height: 16),
             for (final s in settings)
-              if (applicable(s.id, values))
+              if (applicable(s.id, values) && s.id != 0xd19b)
                 Padding(
                   key: ValueKey(s.id),
                   padding: const EdgeInsets.only(bottom: 18),
-                  child: s.options != null
+                  child: s.id == 0xd19a
+                      ? WbShiftGrid(
+                          red: values[0xd19a]!,
+                          blue: values[0xd19b]!,
+                          onChanged: (r, b) => setState(() {
+                            values[0xd19a] = r;
+                            values[0xd19b] = b;
+                          }),
+                        )
+                      : s.options != null
                       ? DropdownButtonFormField<int>(
                           isExpanded: true,
                           initialValue: values[s.id],

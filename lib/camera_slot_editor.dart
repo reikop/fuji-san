@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'camera/camera.dart';
 import 'domain/recipe.dart';
+import 'wb_shift_grid.dart';
 
 class CameraSlotEditor extends StatefulWidget {
   const CameraSlotEditor({
@@ -19,6 +20,11 @@ class _CameraSlotEditorState extends State<CameraSlotEditor> {
   late final values = Map<int, int>.from(widget.snapshot.values);
   bool saving = false;
   String? error;
+  // Out-of-range camera values keep the per-axis "keep current value" rows.
+  bool get shiftGrid => const [
+    0xd19a,
+    0xd19b,
+  ].every((id) => values[id]! >= -9 && values[id]! <= 9);
   @override
   void dispose() {
     name.dispose();
@@ -88,11 +94,21 @@ class _CameraSlotEditorState extends State<CameraSlotEditor> {
                       ),
                       const SizedBox(height: 24),
                       for (final s in settings)
-                        if (applicable(s.id, values))
+                        if (applicable(s.id, values) &&
+                            !(s.id == 0xd19b && shiftGrid))
                           Padding(
                             key: ValueKey(s.id),
                             padding: const EdgeInsets.only(bottom: 20),
-                            child: s.options != null
+                            child: s.id == 0xd19a && shiftGrid
+                                ? WbShiftGrid(
+                                    red: values[0xd19a]!,
+                                    blue: values[0xd19b]!,
+                                    onChanged: (r, b) => setState(() {
+                                      values[0xd19a] = r;
+                                      values[0xd19b] = b;
+                                    }),
+                                  )
+                                : s.options != null
                                 ? DropdownButtonFormField<int>(
                                     key: ValueKey('${s.id}-${values[s.id]}'),
                                     isExpanded: true,
