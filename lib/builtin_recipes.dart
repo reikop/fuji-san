@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'domain/recipe.dart';
+import 'film_icon.dart';
 
 // A published recipe bundled with the app (assets/builtin_recipes.json, built by
 // tool/build_builtin_recipes.py). It only enters the library when the user adds it.
@@ -385,6 +386,10 @@ class _BuiltinCatalogState extends State<BuiltinCatalog> {
                         final done = added.contains(item.recipe.id);
                         return ListTile(
                           onTap: () => details(item),
+                          leading: FilmIcon(
+                            item.recipe.values[0xd192]!,
+                            size: 26,
+                          ),
                           title: Text(item.recipe.name),
                           subtitle: Text(
                             '${item.recipe.film} · ${item.creator} · ${item.camera}\n'

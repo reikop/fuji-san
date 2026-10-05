@@ -25,7 +25,8 @@ Add-Type -TypeDefinition 'public class UpdateFixture { public static void Main()
 function RunHelper($fixture) {
     $fixture.manifest | ConvertTo-Json | Set-Content -LiteralPath "$($fixture.job)\job.json" -Encoding UTF8
     $args = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $helper + '"'), '-Manifest', ('"' + $fixture.job + '\job.json"'))
-    $process = Start-Process powershell.exe -ArgumentList $args -WindowStyle Hidden -PassThru
+    # The app starts the helper from its own folder, so the helper must not keep that folder locked.
+    $process = Start-Process powershell.exe -ArgumentList $args -WindowStyle Hidden -PassThru -WorkingDirectory $fixture.target
     if (!$process.WaitForExit(30000)) { $process.Kill(); throw 'Updater test timeout' }
     return $process.ExitCode
 }

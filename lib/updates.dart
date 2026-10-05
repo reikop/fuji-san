@@ -5,7 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'storage.dart';
 
-const appRelease = '0.2.4-alpha.1';
+const appRelease = '0.2.5-alpha.1';
 const releasesUrl = 'https://github.com/reikop/fuji-san/releases';
 
 class ReleaseVersion implements Comparable<ReleaseVersion> {
@@ -216,7 +216,7 @@ class UpdateService {
       '${job.path}/updater.ps1',
       '-Manifest',
       '${job.path}/job.json',
-    ]);
+    ], workingDirectory: job.path);
     for (var i = 0; i < 120; i++) {
       if (await File('${job.path}/error.txt').exists()) {
         throw StateError(await File('${job.path}/error.txt').readAsString());

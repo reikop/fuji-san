@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'camera/camera.dart';
 import 'domain/recipe.dart';
 import 'wb_shift_grid.dart';
+import 'film_icon.dart';
 
 class CameraSlotEditor extends StatefulWidget {
   const CameraSlotEditor({
@@ -127,7 +128,18 @@ class _CameraSlotEditorState extends State<CameraSlotEditor> {
                                       for (final option in s.options!.entries)
                                         DropdownMenuItem(
                                           value: option.key,
-                                          child: Text(option.value),
+                                          child: s.id == 0xd192
+                                              ? Row(
+                                                  children: [
+                                                    FilmIcon(
+                                                      option.key,
+                                                      size: 18,
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Text(option.value),
+                                                  ],
+                                                )
+                                              : Text(option.value),
                                         ),
                                     ],
                                     onChanged: (v) =>

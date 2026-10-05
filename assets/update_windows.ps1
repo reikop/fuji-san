@@ -5,7 +5,12 @@ $jobRoot = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Manifest))
 $backup = $null
 $target = $null
 $swapped = $false
+$stage = $null
 try {
+    # The app starts this helper from its own folder. A process keeps its working
+    # directory locked, which would make moving the application directory fail.
+    Set-Location -LiteralPath $jobRoot
+    [Environment]::CurrentDirectory = $jobRoot
     $job = Get-Content -LiteralPath $Manifest -Raw -Encoding UTF8 | ConvertFrom-Json
     $target = [IO.Path]::GetFullPath($job.target).TrimEnd('\')
     $parent = [IO.Path]::GetDirectoryName($target)
@@ -55,6 +60,10 @@ try {
     [IO.File]::WriteAllText("$jobRoot\complete", $backup)
 } catch {
     [IO.File]::WriteAllText("$jobRoot\error.txt", $_.Exception.Message)
+    # The stage is this run's own unpacked copy; drop it when it was not installed.
+    if (!$swapped -and $stage -and (Test-Path -LiteralPath $stage)) {
+        try { [IO.Directory]::Delete($stage, $true) } catch { }
+    }
     if ($swapped -and $backup -and (Test-Path -LiteralPath $backup)) {
         $failed = [IO.Path]::Combine($parent, '.fuji-san-failed-' + $token)
         if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($failed)) -eq $parent -and !(Test-Path -LiteralPath $failed)) {

@@ -14,6 +14,7 @@ import 'updates.dart';
 import 'camera_slot_editor.dart';
 import 'wb_shift_grid.dart';
 import 'builtin_recipes.dart';
+import 'film_icon.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 Future<void> main(List<String> arguments) async {
@@ -1036,13 +1037,21 @@ class _WorkspaceState extends State<Workspace> {
             ),
             padding: const EdgeInsets.all(16),
             alignment: Alignment.bottomLeft,
-            child: Text(
-              r.film.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 11,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.bold,
-              ),
+            child: Row(
+              children: [
+                FilmIcon(r.values[0xd192]!),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    r.film.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Padding(
@@ -1301,7 +1310,15 @@ class _RecipeEditorState extends State<RecipeEditor> {
                               .map(
                                 (e) => DropdownMenuItem(
                                   value: e.key,
-                                  child: Text(e.value),
+                                  child: s.id == 0xd192
+                                      ? Row(
+                                          children: [
+                                            FilmIcon(e.key, size: 18),
+                                            const SizedBox(width: 10),
+                                            Text(e.value),
+                                          ],
+                                        )
+                                      : Text(e.value),
                                 ),
                               )
                               .toList(),
