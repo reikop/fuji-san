@@ -1,7 +1,7 @@
 name: fuji_san
 description: A native X100VI recipe library and verified USB batch writer.
 publish_to: none
-version: 0.2.5+8
+version: 0.2.6+9
 environment:
   sdk: '>=3.10.0 <4.0.0'
 dependencies:

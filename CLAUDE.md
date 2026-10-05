@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Fuji San is a Flutter app (Windows, macOS, Android, iOS) that manages FUJIFILM X100VI film recipes and writes them to the camera's C1–C7 custom slots over native USB. No server, no accounts. User-facing strings (UI, error messages, README) are Korean; keep new ones Korean.
 
-The project is experimental: only Windows read paths have been verified on a real camera (X100VI firmware 1.32). Writes are unverified on hardware. A passing build or test run says nothing about real-camera compatibility — do not claim it does in docs or commit messages.
+The project is experimental. On a real camera (X100VI firmware 1.32, Windows WPD) reading and one C1–C7 batch apply with read-back have been confirmed; restore, slot editing and every other platform are unverified on hardware. A passing build or test run says nothing about real-camera compatibility — do not claim it does in docs or commit messages.
 
 ## Commands
 

@@ -552,7 +552,7 @@ class _WorkspaceState extends State<Workspace> {
     if (plan.isEmpty) return;
     if (!await confirm(
       '카메라 슬롯 덮어쓰기',
-      '${plan.entries.map((e) => 'C${e.key} → ${e.value.cameraName}').join('\n')}\n\n선택한 슬롯의 레시피 설정을 백업한 뒤 덮어씁니다. 배치하지 않은 슬롯은 유지합니다. 이 버전의 실기기 전송은 아직 검증되지 않았습니다. 실패하면 즉시 멈추며 백업에서 수동 복원할 수 있습니다.',
+      '${plan.entries.map((e) => 'C${e.key} → ${e.value.cameraName}').join('\n')}\n\n선택한 슬롯의 레시피 설정을 백업한 뒤 덮어씁니다. 배치하지 않은 슬롯은 유지합니다. 실기기 전송은 Windows · X100VI 1.32에서 한 번 확인했을 뿐입니다. 실패하면 즉시 멈추며 백업에서 수동 복원할 수 있습니다.',
     )) {
       return;
     }
@@ -826,7 +826,7 @@ class _WorkspaceState extends State<Workspace> {
       ),
       const SizedBox(height: 24),
       const Text(
-        'v$appRelease · Experimental\nWindows 실기기 읽기 확인 · 쓰기 미검증\nFUJIFILM 비공식 오픈소스 앱',
+        'v$appRelease · Experimental\nWindows X100VI 1.32 읽기·일괄 쓰기 확인 · 복원 미검증\nFUJIFILM 비공식 오픈소스 앱',
         style: TextStyle(fontSize: 11, color: Colors.black54),
       ),
     ],
