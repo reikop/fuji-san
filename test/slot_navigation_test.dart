@@ -39,10 +39,11 @@ void main() {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       messenger.setMockMethodCallHandler(NativeTransport.channel, (call) async {
-        if (call.method == 'discover')
+        if (call.method == 'discover') {
           return [
             {'id': 'wpd:test', 'name': 'X100VI'},
           ];
+        }
         if (call.method == 'connect') return {'managedSession': true};
         if (call.method == 'disconnect') return null;
         final args = call.arguments as Map;
