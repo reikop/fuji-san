@@ -1,0 +1,60 @@
+name: Native builds
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.6'
+          channel: stable
+      - run: flutter pub get
+      - run: dart run tool/sync_apple.dart --check
+      - run: dart format --output=none --set-exit-if-changed lib test tool
+      - run: flutter analyze
+      - run: flutter test
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+            command: flutter build windows --release
+            artifact: build/windows/x64/runner/Release/
+          - os: ubuntu-latest
+            target: android
+            command: flutter build apk --debug
+            artifact: build/app/outputs/flutter-apk/app-debug.apk
+          - os: macos-15
+            target: macos
+            command: flutter build macos --release
+            artifact: build/macos/Build/Products/Release/
+          - os: macos-15
+            target: ios
+            command: flutter build ios --release --no-codesign
+            artifact: build/ios/iphoneos/
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.6'
+          channel: stable
+      - run: flutter pub get
+      - run: ${{ matrix.command }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fuji-san-${{ matrix.target }}-experimental
+          path: ${{ matrix.artifact }}

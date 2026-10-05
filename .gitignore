@@ -1,0 +1,17 @@
+.tools/
+.dart_tool/
+.flutter-plugins-dependencies
+build/
+**/local.properties
+**/ephemeral/
+**/Pods/
+**/.symlinks/
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+.env*
+!.env.example
+.idea/
+*.iml
+.DS_Store
