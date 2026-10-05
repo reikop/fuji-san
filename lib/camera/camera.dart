@@ -239,6 +239,7 @@ class BatchWriter {
       report('원본 슬롯 백업 중');
       final backup = await camera.backup(plan.keys.toSet());
       if (backup.length != plan.length ||
+          backup.map((s) => s.slot).toSet().length != plan.length ||
           backup
               .map((s) => s.slot)
               .toSet()

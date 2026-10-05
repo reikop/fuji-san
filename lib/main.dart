@@ -18,7 +18,8 @@ const ink = Color(0xff222b27),
     cream = Color(0xfff5f3ec);
 
 class FujiSanApp extends StatelessWidget {
-  const FujiSanApp({super.key});
+  const FujiSanApp({super.key, this.store});
+  final LibraryStore? store;
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
@@ -37,18 +38,20 @@ class FujiSanApp extends StatelessWidget {
         fillColor: Colors.white,
       ),
     ),
-    home: const Workspace(),
+    home: Workspace(store: store),
   );
 }
 
 class Workspace extends StatefulWidget {
-  const Workspace({super.key});
+  const Workspace({super.key, this.store});
+  final LibraryStore? store;
   @override
   State<Workspace> createState() => _WorkspaceState();
 }
 
 class _WorkspaceState extends State<Workspace> {
-  final store = LibraryStore(), transport = NativeTransport();
+  late final store = widget.store ?? LibraryStore();
+  final transport = NativeTransport();
   late final FujiCamera camera = FujiCamera(transport);
   List<Recipe> recipes = [];
   Map<int, String> slots = {};
@@ -924,6 +927,7 @@ class _RecipeEditorState extends State<RecipeEditor> {
                   padding: const EdgeInsets.only(bottom: 18),
                   child: s.options != null
                       ? DropdownButtonFormField<int>(
+                          isExpanded: true,
                           initialValue: values[s.id],
                           decoration: InputDecoration(labelText: s.label),
                           items: s.options!.entries
