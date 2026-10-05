@@ -44,4 +44,54 @@ void main() {
     expect(added.single.values, target.recipe.values);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('film tabs, tag filters and sorting narrow and order the list', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 4000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BuiltinCatalog(onAdd: (_) async {}, load: () async => bundled),
+      ),
+    );
+    await tester.pumpAndSettle();
+    bool wanted(BuiltinRecipe b) =>
+        b.recipe.values[0xd192] == 11 &&
+        b.recipe.values[0xd191] == 0 &&
+        b.recipe.values[0xd190] == 200 &&
+        b.recipe.values[0xd196] == 3;
+    final expected = bundled.where(wanted).toList()
+      ..sort((a, b) {
+        final c = b.recipe.values[0xd19d]!.compareTo(a.recipe.values[0xd19d]!);
+        return c != 0
+            ? c
+            : a.recipe.name.toLowerCase().compareTo(
+                b.recipe.name.toLowerCase(),
+              );
+      });
+    expect(expected.length, greaterThan(3));
+    final tab = find.textContaining(RegExp(r'^Classic Chrome \d+$'));
+    await tester.ensureVisible(tab);
+    await tester.pumpAndSettle();
+    await tester.tap(tab);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilterChip, 'DR200'));
+    await tester.tap(find.widgetWithText(FilterChip, 'CC Strong'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('${expected.length}개 ·'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('builtin-sort')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('하이라이트').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('오름차순'));
+    await tester.pumpAndSettle();
+    final titles = tester
+        .widgetList<ListTile>(find.byType(ListTile))
+        .map((t) => (t.title! as Text).data)
+        .toList();
+    expect(titles.take(4), expected.take(4).map((b) => b.recipe.name));
+    expect(tester.takeException(), isNull);
+  });
 }

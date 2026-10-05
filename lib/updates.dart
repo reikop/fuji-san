@@ -5,7 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'storage.dart';
 
-const appRelease = '0.2.3-alpha.1';
+const appRelease = '0.2.4-alpha.1';
 const releasesUrl = 'https://github.com/reikop/fuji-san/releases';
 
 class ReleaseVersion implements Comparable<ReleaseVersion> {
