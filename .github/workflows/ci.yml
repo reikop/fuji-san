@@ -5,9 +5,13 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -20,6 +24,7 @@ jobs:
       - run: flutter analyze
       - run: flutter test
   build:
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +32,7 @@ jobs:
           - os: windows-latest
             target: windows
             command: flutter build windows --release
-            artifact: build/windows/x64/runner/Release/
+            artifact: fuji-san-windows.zip
           - os: ubuntu-latest
             target: android
             command: flutter build apk --debug
@@ -35,11 +40,11 @@ jobs:
           - os: macos-15
             target: macos
             command: flutter build macos --release
-            artifact: build/macos/Build/Products/Release/
+            artifact: fuji-san-macos.tar.gz
           - os: macos-15
             target: ios
             command: flutter build ios --release --no-codesign
-            artifact: build/ios/iphoneos/
+            artifact: fuji-san-ios-unsigned.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +59,19 @@ jobs:
           channel: stable
       - run: flutter pub get
       - run: ${{ matrix.command }}
+      - name: Package Windows application
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath fuji-san-windows.zip
+      - name: Preserve Apple bundle permissions and symlinks
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [ '${{ matrix.target }}' = 'macos' ]; then
+            tar -czf fuji-san-macos.tar.gz -C build/macos/Build/Products/Release fuji_san.app
+          else
+            tar -czf fuji-san-ios-unsigned.tar.gz -C build/ios/iphoneos Runner.app
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: fuji-san-${{ matrix.target }}-experimental

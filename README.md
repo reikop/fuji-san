@@ -76,9 +76,11 @@ Apple USB 공유 소스는 `native/apple/FujiUsb.swift`입니다. 수정 후
 [GitHub Actions](https://github.com/reikop/fuji-san/actions)에서 네 플랫폼을 빌드합니다.
 성공한 실행의 Artifacts에서 결과를 받을 수 있습니다.
 
-- Windows: Release 폴더 전체를 보관하고 `fuji_san.exe` 실행. 서명되지 않은 빌드.
+- Windows: ZIP을 폴더에 풀고 `fuji_san.exe` 실행. 나머지 파일도 함께 보관합니다.
+  서명되지 않은 빌드이며 Microsoft Visual C++ 런타임이 필요할 수 있습니다.
 - Android: 개발용 debug APK. 스토어 배포용 서명 아님.
-- macOS: 서명·공증 없는 개발 빌드. 다운로드 후 로컬 서명 등이 필요할 수 있음.
+- macOS: TAR.GZ를 풀어 앱 실행. 실행 권한·심볼릭 링크를 보존하는 압축 파일입니다.
+  서명·공증 없는 개발 빌드로 다운로드 후 로컬 서명 등이 필요할 수 있습니다.
 - iOS: **서명 없는 컴파일 결과**. 바로 설치하는 IPA가 아니며 실기기 설치에는
   macOS/Xcode에서 개인 또는 개발자 팀 서명이 필요함. 계정 키는 저장소에 없음.
 
