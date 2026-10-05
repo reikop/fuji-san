@@ -46,12 +46,14 @@ class FujiCamera implements RecipeCamera {
   FujiCamera(this.transport);
   final CameraTransport transport;
   CameraIdentity? identity;
+  bool _knownSchemaOnly = false;
   Future<Uint8List> read(int prop) => transport.command(0x1015, params: [prop]);
   Future<void> set(int prop, Uint8List value) async {
     await transport.command(0x1016, params: [prop], outgoing: value);
   }
 
   Future<void> inspect() async {
+    _knownSchemaOnly = false;
     final r = Reader(await transport.command(0x1001));
     r.read16();
     r.read32();
@@ -119,7 +121,27 @@ class FujiCamera implements RecipeCamera {
   }
 
   Future<void> _validateDescriptor(int id, Uint8List bytes) async {
-    final r = Reader(await transport.command(0x1014, params: [id]));
+    if (_knownSchemaOnly) {
+      _validateKnownValue(id, bytes);
+      return;
+    }
+    late Uint8List descriptor;
+    try {
+      descriptor = await transport.command(0x1014, params: [id]);
+    } on PtpResponseException catch (e) {
+      // Observed on a real X100VI 1.32: 1014 is advertised, but every recipe
+      // descriptor returns GeneralError. Value reads work through WPD.
+      if (identity?.model == 'X100VI' &&
+          identity?.firmware == '1.32' &&
+          e.operation == 0x1014 &&
+          e.code == 0x2002) {
+        _validateKnownValue(id, bytes);
+        _knownSchemaOnly = true;
+        return;
+      }
+      rethrow;
+    }
+    final r = Reader(descriptor);
     if (r.read16() != id) {
       throw const FormatException('Property descriptor mismatch');
     }
@@ -156,6 +178,31 @@ class FujiCamera implements RecipeCamera {
       }
     } else if (form != 0) {
       throw const FormatException('Unknown property descriptor form');
+    }
+  }
+
+  void _validateKnownValue(int id, Uint8List bytes) {
+    if (!identity!.properties.contains(id)) {
+      throw StateError('카메라가 지원하지 않는 속성입니다.');
+    }
+    if (id == 0xd18d) {
+      if (bytes.length == 1 && bytes[0] == 0) return;
+      final name = Reader(bytes).string();
+      if (name.length > 25 || bytes.length != 1 + (name.length + 1) * 2) {
+        throw const FormatException('Invalid camera name backup');
+      }
+      return;
+    }
+    final setting = settings.firstWhere((s) => s.id == id);
+    if (bytes.length != 2) {
+      throw const FormatException('Invalid recipe property size');
+    }
+    final raw = ByteData.sublistView(bytes);
+    final value = setting.signed
+        ? raw.getInt16(0, Endian.little)
+        : raw.getUint16(0, Endian.little);
+    if (!setting.accepts(value)) {
+      throw StateError('X100VI 설정 범위를 벗어났습니다: ${setting.label}');
     }
   }
 

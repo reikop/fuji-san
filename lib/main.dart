@@ -7,9 +7,13 @@ import 'camera/camera.dart';
 import 'camera/ptp.dart';
 import 'domain/recipe.dart';
 import 'storage.dart';
+import 'diagnostics.dart';
 
-void main() {
+Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (arguments.length == 2 && arguments.first == '--diagnose-camera') {
+    exit(await diagnoseCamera(arguments[1]));
+  }
   runApp(const FujiSanApp());
 }
 
@@ -158,7 +162,7 @@ class _WorkspaceState extends State<Workspace> {
       final devices = await transport.discover();
       if (devices.isEmpty) {
         throw StateError(
-          '카메라를 찾지 못했습니다. 데이터 케이블과 USB RAW CONV./BACKUP RESTORE 설정을 확인하세요. Windows는 WinUSB 드라이버가 필요합니다.',
+          '카메라를 찾지 못했습니다. 데이터 케이블과 USB RAW CONV./BACKUP RESTORE 설정을 확인하세요. Windows 기본 WPD 드라이버를 지원합니다.',
         );
       }
       if (!mounted) return;
@@ -563,12 +567,12 @@ class _WorkspaceState extends State<Workspace> {
       const Text('연결 안내', style: TextStyle(fontWeight: FontWeight.bold)),
       const SizedBox(height: 12),
       const Text(
-        '카메라 USB 모드\nUSB RAW CONV./BACKUP RESTORE\n\n데이터 전송 케이블을 사용하고 X RAW STUDIO 등 다른 카메라 앱은 종료하세요.\n\nWindows: WinUSB 연결 필요\nAndroid: USB 접근 허용\nApple: 카메라 접근 허용',
+        '카메라 USB 모드\nUSB RAW CONV./BACKUP RESTORE\n\n데이터 전송 케이블을 사용하고 X RAW STUDIO 등 다른 카메라 앱은 종료하세요.\n\nWindows: 기본 WPD 드라이버 지원\nAndroid: USB 접근 허용\nApple: 카메라 접근 허용',
         style: TextStyle(fontSize: 12, height: 1.8),
       ),
       const SizedBox(height: 24),
       const Text(
-        'v0.1 · Experimental\n실기기 검증 전\nFUJIFILM 비공식 오픈소스 앱',
+        'v0.1.1 · Experimental\nWindows 실기기 읽기 확인 · 쓰기 미검증\nFUJIFILM 비공식 오픈소스 앱',
         style: TextStyle(fontSize: 11, color: Colors.black54),
       ),
     ],
@@ -968,7 +972,7 @@ class _RecipeEditorState extends State<RecipeEditor> {
                         ),
                 ),
             const Text(
-              '카메라 상태에 따라 사용 가능한 값이 달라질 수 있습니다. 전송 시 카메라가 제공하는 허용 범위를 다시 확인합니다.',
+              '카메라 상태에 따라 사용 가능한 값이 달라질 수 있습니다. 기종별 설정 범위와 카메라 응답을 확인합니다. X100VI 1.32는 속성 설명 대신 알려진 설정 범위를 사용하며, 쓰기 후 읽기로 검증합니다.',
               style: TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],

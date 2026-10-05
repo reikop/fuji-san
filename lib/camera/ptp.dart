@@ -87,6 +87,14 @@ abstract interface class CameraTransport {
   });
 }
 
+class PtpResponseException extends StateError {
+  PtpResponseException(this.code, this.operation)
+    : super(
+        '카메라 응답 0x${code.toRadixString(16)} (명령 0x${operation.toRadixString(16)})',
+      );
+  final int code, operation;
+}
+
 class NativeTransport implements CameraTransport {
   static const channel = MethodChannel('dev.reikop.fuji_san/usb');
   bool managed = false, opened = false, _busy = false;
@@ -194,9 +202,7 @@ class NativeTransport implements CameraTransport {
         throw const FormatException('PTP response mismatch');
       }
       if (response.code != 0x2001) {
-        throw StateError(
-          '카메라 응답 0x${response.code.toRadixString(16)} (명령 0x${code.toRadixString(16)})',
-        );
+        throw PtpResponseException(response.code, code);
       }
       return data;
     } on PlatformException {

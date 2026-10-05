@@ -7,6 +7,7 @@ import 'package:fuji_san/domain/recipe.dart';
 class CameraFixture implements CameraTransport {
   int selected = 4;
   bool corrupt = false;
+  bool descriptorsUnavailable = false;
   final written = <int>[];
   final slots = <int, Map<int, Uint8List>>{
     for (var i = 1; i <= 7; i++)
@@ -38,6 +39,7 @@ class CameraFixture implements CameraTransport {
       return Uint8List(0);
     }
     if (code == 0x1014) {
+      if (descriptorsUnavailable) throw PtpResponseException(0x2002, 0x1014);
       final type = prop == 0xd18d
           ? 0xffff
           : settings.firstWhere((s) => s.id == prop).signed
@@ -57,6 +59,40 @@ class CameraFixture implements CameraTransport {
 }
 
 void main() {
+  test(
+    'X100VI 1.32 accepts documented schema when descriptors return 2002',
+    () async {
+      final transport = CameraFixture()..descriptorsUnavailable = true;
+      final camera = FujiCamera(transport)
+        ..identity = CameraIdentity('X100VI', '1.32', 'test', {
+          0xd18d,
+          ...settings.map((s) => s.id),
+        });
+      final original = (await camera.backup({1})).single;
+      await camera.write(1, Recipe.fresh());
+      expect(Reader(transport.slots[1]![0xd18d]!).string(), 'My Recipe');
+      await camera.restore(original);
+      expect(Reader(transport.slots[1]![0xd18d]!).string(), 'Original 1');
+      expect(transport.selected, 4);
+    },
+  );
+  test(
+    'descriptor fallback does not hide errors on unverified firmware',
+    () async {
+      final transport = CameraFixture()..descriptorsUnavailable = true;
+      final camera = FujiCamera(transport)
+        ..identity = CameraIdentity('X100VI', '9.99', 'test', {
+          0xd18d,
+          ...settings.map((s) => s.id),
+        });
+      await expectLater(
+        camera.write(1, Recipe.fresh()),
+        throwsA(isA<PtpResponseException>()),
+      );
+      expect(transport.written, isEmpty);
+      expect(transport.selected, 4);
+    },
+  );
   FujiCamera create(CameraFixture transport) => FujiCamera(transport)
     ..identity = CameraIdentity(
       'X100VI',

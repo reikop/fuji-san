@@ -10,7 +10,7 @@ macOS, Android, iOS 화면을 공유하고 각 OS의 네이티브 USB API로 연
 
 화면 예시의 레시피는 UI 검토용 데이터이며 앱에 기본 제공되는 검증된 레시피가 아닙니다.
 
-> **Experimental 0.1 — 실기기 검증 전.** 레시피 관리, 네이티브 USB 연결 코드,
+> **Experimental 0.1.1 — Windows 실기기 읽기 확인, 쓰기 미검증.** 레시피 관리, 네이티브 USB 연결 코드,
 > 백업 및 검증을 포함한 일괄 쓰기가 구현되어 있습니다. 빌드 성공은 실제
 > 카메라 호환성 검증을 의미하지 않습니다. 아직 모든 OS에서 전송이 검증된
 > 완성품으로 배포하지 않습니다.
@@ -22,7 +22,7 @@ macOS, Android, iOS 화면을 공유하고 각 OS의 네이티브 USB API로 연
 - 자체 JSON v1 가져오기 / 클립보드 내보내기 (OFR·FP1 호환 아님)
 - C1–C7 레시피 배치 및 선택 슬롯 일괄 적용
 - 쓰기 전 해당 슬롯의 알려진 레시피 필드 백업을 디스크에 저장
-- 카메라가 제공하는 자료형·허용 값 확인 및 쓰기 후 읽기 검증
+- 카메라 속성 설명 또는 검증된 기종별 설정 범위 확인 및 쓰기 후 읽기 검증
 - 실패 시 즉시 중단, 원본 백업을 통한 수동 복원
 - 이미지 크기·화질 등 미확인 속성은 쓰지 않음
 
@@ -34,7 +34,7 @@ macOS, Android, iOS 화면을 공유하고 각 OS의 네이티브 USB API로 연
 
 | 플랫폼 | 네이티브 연결 | 요구 사항 | 실기기 검증 |
 |---|---|---|---|
-| Windows | WinUSB + SetupAPI | PTP 인터페이스의 WinUSB 드라이버 | 미검증 |
+| Windows | 기본 WPD/MTP + WinUSB 대체 경로 | Windows 기본 드라이버 사용 | X100VI 1.32 연결·읽기 확인, 쓰기 미검증 |
 | macOS | ImageCaptureCore | 카메라 접근 권한 | 미검증 |
 | Android | USB Host API | OTG/USB Host, USB 접근 권한 | 미검증 |
 | iOS / iPadOS 15.2+ | ImageCaptureCore | 카메라 제어 권한, 데이터 케이블/어댑터 | 미검증 |
@@ -45,10 +45,13 @@ macOS, Android, iOS 화면을 공유하고 각 OS의 네이티브 USB API로 연
 4. **카메라 전체 백업**으로 C1–C7의 레시피 설정을 먼저 보관합니다.
 5. 테스트용 한 슬롯으로 쓰기·읽기·복원을 확인한 뒤 여러 슬롯으로 확장합니다.
 
-Windows의 기본 사진 전송용 드라이버는 WinUSB와 다를 수 있습니다.
-이 앱은 드라이버를 자동 변경하지 않습니다. WinUSB로 변경하면 해당 모드에서
-기존 사진 전송 앱이 동작하지 않을 수 있으므로 현재 드라이버와 복구 방법을
-확인한 뒤 카메라의 해당 인터페이스에만 적용해야 합니다.
+Windows는 기본 `wpdmtp.inf` 드라이버를 그대로 사용합니다. **WinUSB로 드라이버를
+교체할 필요가 없습니다.** 기존에 WinUSB를 사용하는 장치는 대체 경로로 연결됩니다.
+
+X100VI 펌웨어 1.32에서 장치 정보, 현재 슬롯 및 레시피 속성 읽기를 확인했습니다.
+이 펌웨어는 `GetDevicePropDesc`를 지원 목록에 표시하지만 실제로 `0x2002`를
+반환합니다. 이 조합에 한해 문서화된 X100VI 설정 범위로 검증하고 쓰기 후 값을
+다시 읽습니다. 다른 펌웨어의 설명 요청 오류를 무조건 무시하지 않습니다.
 
 한 번에 적용은 순차 작업이며 원자적 트랜잭션이 아닙니다. 전송 중 케이블이
 분리되면 현재 슬롯이 부분 변경되고 앞선 슬롯은 완료되었을 수 있습니다.
@@ -87,11 +90,15 @@ Apple USB 공유 소스는 `native/apple/FujiUsb.swift`입니다. 수정 후
 ## 구조 및 데이터
 
 `lib/domain` 레시피 검증 · `lib/camera` PTP/백업/일괄 쓰기 · `lib/storage.dart`
-영속 저장 · `android` USB Host · `windows/runner/fuji_usb.cpp` WinUSB ·
+영속 저장 · `android` USB Host · `windows/runner/wpd_camera.cpp` WPD · `windows/runner/fuji_usb.cpp` WinUSB/앱 연결 ·
 `native/apple` ImageCaptureCore · `test` 프로토콜·실패 경로·화면 테스트.
 
 설정은 애플리케이션 지원 폴더의 `fuji-san` 아래 보관합니다. 백업에는 연결된
 카메라 시리얼 번호가 포함됩니다. 앱은 이를 업로드하지 않습니다.
+
+Windows에서 읽기 전용 연결 진단은 `fuji_san.exe --diagnose-camera result.json`으로
+실행할 수 있습니다. 앱과 동일한 연결·모델 검사 경로를 사용하며 장치 정보와
+현재 슬롯/필름 시뮬레이션만 읽습니다. 슬롯 선택이나 레시피 쓰기는 하지 않습니다.
 
 MIT. 자료 출처 및 라이선스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 FUJIFILM과 무관한 독립 오픈소스 프로젝트입니다.
