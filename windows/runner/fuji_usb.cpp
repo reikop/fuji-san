@@ -1,6 +1,7 @@
 #include "fuji_usb.h"
 #include <windows.h>
 #include <setupapi.h>
+#include <initguid.h>
 #include <usbiodef.h>
 #include <winusb.h>
 #include <flutter/method_channel.h>

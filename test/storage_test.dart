@@ -24,7 +24,7 @@ void main() {
         CameraIdentity('X100VI', 'test', 'test-serial', {}),
         [Snapshot(7, {})],
       );
-      expect((await reopened.backups()).single.path, path);
+      expect((await reopened.backups()).single.uri, File(path).uri);
       expect(await File(path).readAsString(), contains('test-serial'));
     } finally {
       await dir.delete(recursive: true);

@@ -31,7 +31,7 @@ macOS, Android, iOS 화면을 공유하고 각 OS의 네이티브 USB API로 연
 | Windows | WinUSB + SetupAPI | PTP 인터페이스의 WinUSB 드라이버 | 미검증 |
 | macOS | ImageCaptureCore | 카메라 접근 권한 | 미검증 |
 | Android | USB Host API | OTG/USB Host, USB 접근 권한 | 미검증 |
-| iOS / iPadOS | ImageCaptureCore | 카메라 제어 권한, 데이터 케이블/어댑터 | 미검증 |
+| iOS / iPadOS 15.2+ | ImageCaptureCore | 카메라 제어 권한, 데이터 케이블/어댑터 | 미검증 |
 
 1. X100VI USB 모드를 **USB RAW CONV./BACKUP RESTORE**로 설정합니다.
 2. X RAW STUDIO, 사진 가져오기 등 다른 카메라 프로그램을 종료합니다.
