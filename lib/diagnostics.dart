@@ -4,12 +4,18 @@ import 'camera/camera.dart';
 import 'camera/ptp.dart';
 import 'updates.dart';
 
-// Uses the exact app transport and model checks, but never changes camera state.
-Future<int> diagnoseCamera(String outputPath, {bool scanSlots = false}) async {
+// Uses the exact app transport and model checks. Only writeBack sends property
+// writes, and it writes back the bytes it just read so no setting changes.
+Future<int> diagnoseCamera(
+  String outputPath, {
+  bool scanSlots = false,
+  bool writeBack = false,
+}) async {
   final transport = NativeTransport();
   final report = <String, dynamic>{
     'appVersion': appRelease,
     'recipeWrites': false,
+    'writeBack': writeBack,
     'scanSlots': scanSlots,
   };
   var code = 0;
@@ -44,6 +50,10 @@ Future<int> diagnoseCamera(String outputPath, {bool scanSlots = false}) async {
       if (report['restoredSlot'] != report['currentSlot']) {
         throw StateError('Slot was not restored');
       }
+    }
+    if (writeBack) {
+      report['writeBack'] = await camera.probeWriteBack({1, 2, 3, 4, 5, 6, 7});
+      report['restoredSlot'] = Reader(await camera.read(0xd18c)).read16();
     }
     report['success'] = true;
   } catch (e) {

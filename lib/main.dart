@@ -25,6 +25,9 @@ Future<void> main(List<String> arguments) async {
   if (arguments.length == 2 && arguments.first == '--diagnose-slots') {
     exit(await diagnoseCamera(arguments[1], scanSlots: true));
   }
+  if (arguments.length == 2 && arguments.first == '--diagnose-write-back') {
+    exit(await diagnoseCamera(arguments[1], writeBack: true));
+  }
   runApp(const FujiSanApp());
 }
 

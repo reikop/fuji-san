@@ -9,6 +9,7 @@ class CameraFixture implements CameraTransport {
   bool corrupt = false;
   bool descriptorsUnavailable = false;
   final written = <int>[];
+  final rejecting = <int>{};
   final slots = <int, Map<int, Uint8List>>{
     for (var i = 1; i <= 7; i++)
       i: {
@@ -33,6 +34,9 @@ class CameraFixture implements CameraTransport {
       if (prop == 0xd18c) {
         selected = Reader(outgoing!).read16();
       } else {
+        if (rejecting.contains(prop)) {
+          throw PtpResponseException(0x201c, 0x1016);
+        }
         written.add(prop);
         slots[selected]![prop] = Uint8List.fromList(outgoing!);
       }
@@ -117,6 +121,50 @@ void main() {
       expect(transport.selected, 4);
     },
   );
+  test(
+    'a refused write is tolerated only when the slot already holds the value',
+    () async {
+      final transport = CameraFixture()..rejecting.addAll({0xd190, 0xd1a1});
+      final camera = create(transport);
+      final backup = (await camera.backup({1})).single;
+      await camera.restore(backup);
+      expect(transport.written, isNot(contains(0xd190)));
+      final recipe = Recipe.fresh();
+      await expectLater(
+        camera.write(
+          1,
+          Recipe(
+            id: 'x',
+            name: 'x',
+            cameraName: 'X',
+            values: {...recipe.values, 0xd190: 400},
+          ),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('0xd190'), contains('0x201c'), contains('90 01')),
+          ),
+        ),
+      );
+      expect(transport.selected, 4);
+    },
+  );
+  test('write-back probe changes nothing and reports each response', () async {
+    final transport = CameraFixture()..rejecting.add(0xd19f);
+    final before = {
+      for (final e in transport.slots.entries) e.key: Map.of(e.value),
+    };
+    final report = await create(transport).probeWriteBack({2, 3});
+    expect(report.map((r) => r['slot']), [2, 3]);
+    final writes = report.first['writes'] as Map<String, dynamic>;
+    expect(writes['d19f']['response'], '0x201c');
+    expect(writes['d190']['response'], '0x2001');
+    expect(writes.values.every((w) => w['unchanged'] == true), true);
+    expect(transport.slots, before);
+    expect(transport.selected, 4);
+  });
   test('read-back mismatch fails and restores selected slot', () async {
     final transport = CameraFixture()..corrupt = true;
     await expectLater(

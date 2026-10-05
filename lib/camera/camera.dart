@@ -236,16 +236,25 @@ class FujiCamera implements RecipeCamera {
       await select(slot);
       for (final e in p.entries) {
         await _validateDescriptor(e.key, e.value);
-        await set(e.key, e.value);
+        try {
+          await set(e.key, e.value);
+        } on PtpResponseException catch (error) {
+          // A real X100VI 1.32 refused a restore of values the slot already
+          // held. A refused write is tolerated only when nothing has to change;
+          // the read-back pass below still checks every property.
+          if (error.code != 0x201c ||
+              !_holds(e.key, e.value, await read(e.key))) {
+            throw StateError(
+              'C$slot ${_label(e.key)} 값을 카메라가 거부했습니다 '
+              '(응답 0x${error.code.toRadixString(16)}, 보낸 값 ${_hex(e.value)}). '
+              '이 항목 이전에 보낸 설정은 적용되었을 수 있습니다.',
+            );
+          }
+        }
       }
       for (final e in p.entries) {
         final got = await read(e.key);
-        final grainOff =
-            e.key == 0xd195 &&
-            Reader(e.value).read16() == 1 &&
-            got.length == 2 &&
-            Reader(got).read16() == 6;
-        if (!grainOff && !_equal(got, e.value)) {
+        if (!_holds(e.key, e.value, got)) {
           throw StateError(
             'C$slot 속성 0x${e.key.toRadixString(16)} 읽기 검증 실패. 백업에서 복원하세요.',
           );
@@ -257,6 +266,56 @@ class FujiCamera implements RecipeCamera {
         throw StateError('원래 C 슬롯 복원 실패. 카메라에서 확인하세요.');
       }
     }
+  }
+
+  // Grain "Off" is written as 1 and read back as 6.
+  bool _holds(int id, Uint8List wanted, Uint8List got) =>
+      _equal(got, wanted) ||
+      (id == 0xd195 &&
+          Reader(wanted).read16() == 1 &&
+          got.length == 2 &&
+          Reader(got).read16() == 6);
+
+  String _label(int id) =>
+      '${id == 0xd18d ? '이름' : settings.firstWhere((s) => s.id == id).label} '
+      '(0x${id.toRadixString(16)})';
+
+  String _hex(Uint8List bytes) =>
+      bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+
+  // Diagnostic: writes each known property of each slot back with the bytes just
+  // read, so no setting changes, and records the camera's response to each write.
+  Future<List<Map<String, dynamic>>> probeWriteBack(Set<int> slots) async {
+    _ready();
+    final original = await read(0xd18c);
+    final result = <Map<String, dynamic>>[];
+    try {
+      for (final slot in slots.toList()..sort()) {
+        await select(slot);
+        final writes = <String, dynamic>{};
+        for (final id in [...settings.map((s) => s.id), 0xd18d]) {
+          final value = await read(id);
+          var response = 0x2001;
+          try {
+            await set(id, value);
+          } on PtpResponseException catch (error) {
+            response = error.code;
+          }
+          writes[id.toRadixString(16)] = {
+            'value': _hex(value),
+            'response': '0x${response.toRadixString(16)}',
+            'unchanged': _equal(await read(id), value),
+          };
+        }
+        result.add({'slot': slot, 'writes': writes});
+      }
+    } finally {
+      await set(0xd18c, original);
+      if (!_equal(await read(0xd18c), original)) {
+        throw StateError('원래 C 슬롯 복원 실패. 카메라에서 확인하세요.');
+      }
+    }
+    return result;
   }
 
   Future<void> editSlot(
