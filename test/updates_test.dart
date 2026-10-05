@@ -85,7 +85,17 @@ void main() {
     'Windows helper launched by the app actually runs and signals ready',
     () async {
       final job = await Directory.systemTemp.createTemp('fuji-launch-test-');
-      addTearDown(() => job.delete(recursive: true));
+      addTearDown(() async {
+        // The helper runs from the job folder and may still be exiting.
+        for (var i = 0; i < 20; i++) {
+          try {
+            await job.delete(recursive: true);
+            return;
+          } on FileSystemException {
+            await Future<void>.delayed(const Duration(milliseconds: 250));
+          }
+        }
+      });
       await File('${job.path}/updater.ps1').writeAsString(
         r'''param([string]$Manifest)
 [IO.File]::WriteAllText((Join-Path (Split-Path -Parent $Manifest) 'ready'), 'ready')
