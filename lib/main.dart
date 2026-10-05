@@ -10,6 +10,7 @@ import 'domain/recipe.dart';
 import 'storage.dart';
 import 'diagnostics.dart';
 import 'updates.dart';
+import 'camera_slot_editor.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 Future<void> main(List<String> arguments) async {
@@ -164,42 +165,36 @@ class _WorkspaceState extends State<Workspace> {
 
   Future<void> showCameraSlot(int slot) async {
     final snapshot = cameraSlots[slot]!;
-    final values = snapshot.values;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('C$slot · ${snapshot.name}'),
-        content: SizedBox(
-          width: 400,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('카메라에서 읽은 설정', style: TextStyle(color: green)),
-                for (final setting in settings)
-                  if (applicable(setting.id, values))
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(setting.label),
-                      trailing: Text(
-                        setting.accepts(values[setting.id]!)
-                            ? setting.display(values[setting.id]!)
-                            : '알 수 없는 값 (${values[setting.id]})',
-                      ),
-                    ),
-              ],
-            ),
+    setState(() => busy = true);
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => CameraSlotEditor(
+            snapshot: snapshot,
+            onSave: (edit) async {
+              try {
+                await camera.editSlot(
+                  snapshot,
+                  edit,
+                  (backup) => store.backup(camera.identity!, backup),
+                );
+                final updated = (await camera.backup({slot})).single;
+                cameraSlots[slot] = updated;
+                slotsReadAt = DateTime.now();
+                report('C$slot 수정 및 읽기 검증 완료');
+              } catch (_) {
+                cameraSlots.remove(slot);
+                slotsReadAt = null;
+                if (!transport.opened) camera.identity = null;
+                rethrow;
+              }
+            },
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('닫기'),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Future<void> _load() async {
@@ -1001,7 +996,11 @@ class _WorkspaceState extends State<Workspace> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             child: ListTile(
-              onTap: busy || !loaded ? null : () => assign(slot),
+              onTap: busy || !loaded
+                  ? null
+                  : () => cameraSlots[slot] != null
+                        ? showCameraSlot(slot)
+                        : assign(slot),
               leading: Text(
                 'C$slot',
                 style: const TextStyle(
@@ -1020,16 +1019,16 @@ class _WorkspaceState extends State<Workspace> {
                     '카메라 · ${cameraSlots[slot]!.film}',
                   if (assigned(slot) != null) '전송 대기 → ${assigned(slot)!.name}',
                   if (assigned(slot) == null && cameraSlots[slot] != null)
-                    '누르면 교체할 레시피 배치',
+                    '눌러서 이름·설정 편집',
                 ].join('\n'),
                 style: const TextStyle(fontSize: 10),
               ),
               trailing: cameraSlots[slot] == null
                   ? const Icon(Icons.add, size: 16)
                   : IconButton(
-                      tooltip: '카메라 설정 보기',
-                      icon: const Icon(Icons.info_outline, size: 18),
-                      onPressed: busy ? null : () => showCameraSlot(slot),
+                      tooltip: '다른 레시피로 교체',
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      onPressed: busy ? null : () => assign(slot),
                     ),
             ),
           ),

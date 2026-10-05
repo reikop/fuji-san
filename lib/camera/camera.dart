@@ -12,6 +12,7 @@ class Snapshot {
   Snapshot(this.slot, this.properties);
   final int slot;
   final Map<int, Uint8List> properties;
+  String get rawName => Reader(properties[0xd18d]!).string();
   String get name {
     final name = Reader(properties[0xd18d]!).string().trim();
     return name.isEmpty ? '이름 없는 레시피' : name;
@@ -252,7 +253,29 @@ class FujiCamera implements RecipeCamera {
       }
     } finally {
       await set(0xd18c, original);
+      if (!_equal(await read(0xd18c), original)) {
+        throw StateError('원래 C 슬롯 복원 실패. 카메라에서 확인하세요.');
+      }
     }
+  }
+
+  Future<void> editSlot(
+    Snapshot original,
+    SlotEdit edit,
+    Future<void> Function(List<Snapshot>) persist,
+  ) async {
+    final changes = edit.changes(original);
+    if (changes.isEmpty) return;
+    final current = (await backup({original.slot})).single;
+    if (original.properties.entries.any(
+      (e) =>
+          current.properties[e.key] == null ||
+          !_equal(e.value, current.properties[e.key]!),
+    )) {
+      throw StateError('편집 중 카메라 설정이 바뀌었습니다. 닫고 새로고침한 뒤 다시 편집하세요.');
+    }
+    await persist([current]);
+    await _write(original.slot, changes);
   }
 
   @override
@@ -279,6 +302,38 @@ class FujiCamera implements RecipeCamera {
     }
     p[0xd18d] = snapshot.properties[0xd18d]!;
     await _write(snapshot.slot, p);
+  }
+}
+
+class SlotEdit {
+  SlotEdit(this.name, Map<int, int> values) : values = Map.unmodifiable(values);
+  final String name;
+  final Map<int, int> values;
+
+  Map<int, Uint8List> changes(Snapshot original) {
+    if (values.length != settings.length ||
+        settings.any((s) => !values.containsKey(s.id))) {
+      throw const FormatException('불완전한 레시피 설정입니다.');
+    }
+    final before = original.values;
+    final result = <int, Uint8List>{};
+    for (final setting in settings) {
+      if (!applicable(setting.id, values) ||
+          values[setting.id] == before[setting.id]) {
+        continue;
+      }
+      if (!setting.accepts(values[setting.id]!)) {
+        throw FormatException('${setting.label} 설정값을 확인하세요.');
+      }
+      result[setting.id] = u16(values[setting.id]!);
+    }
+    if (name != original.rawName) {
+      if (!RegExp(r'^[A-Za-z0-9 _.,+()\-]{0,25}$').hasMatch(name)) {
+        throw const FormatException('카메라 이름은 영문·숫자·공백·_.,+()- 25자 이내로 입력하세요.');
+      }
+      result[0xd18d] = ptpString(name);
+    }
+    return result;
   }
 }
 
