@@ -89,6 +89,15 @@ void main() {
         () => messenger.setMockMethodCallHandler(NativeTransport.channel, null),
       );
       final store = BackupStore();
+      final base = Recipe.fresh();
+      await store.save([
+        Recipe(
+          id: 'lib',
+          name: 'Lib One',
+          cameraName: 'Lib One',
+          values: {...base.values, 0xd190: 65535},
+        ),
+      ], {});
       await tester.pumpWidget(FujiSanApp(store: store));
       await tester.pumpAndSettle();
       await tester.tap(find.text('카메라 연결'));
@@ -111,6 +120,29 @@ void main() {
       await tester.tap(find.byTooltip('다른 레시피로 교체').first);
       await tester.pumpAndSettle();
       expect(find.text('C1에 배치'), findsOneWidget);
+      // An applied assignment stops counting as pending.
+      await tester.tap(find.text('Lib One · Classic Chrome'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('전송 대기 → Lib One'), findsOneWidget);
+      final apply = find.text('1개 슬롯 일괄 적용');
+      await tester.scrollUntilVisible(
+        apply,
+        200,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('camera-kit')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      await tester.tap(apply);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('적용'));
+      await tester.pumpAndSettle();
+      expect(find.text('배치한 레시피가 모두 적용됨', skipOffstage: false), findsOneWidget);
+      expect(
+        find.textContaining('적용됨 · Lib One', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(Reader(fixture.slots[1]![0xd190]!).read16(), 65535);
       expect(tester.takeException(), isNull);
     },
   );

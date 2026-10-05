@@ -262,6 +262,20 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
+  // An assigned recipe is pending until the camera slot is known to hold it.
+  bool pending(int slot) {
+    final recipe = assigned(slot);
+    if (recipe == null) return false;
+    final snapshot = cameraSlots[slot];
+    if (snapshot == null) return true;
+    final values = snapshot.values;
+    return snapshot.rawName != recipe.cameraName ||
+        recipe.writeValues.entries.any((e) => values[e.key] != e.value);
+  }
+
+  int get pendingCount =>
+      [for (var i = 1; i <= 7; i++) pending(i)].where((p) => p).length;
+
   Recipe? assigned(int slot) {
     final id = slots[slot];
     for (final r in recipes) {
@@ -547,7 +561,7 @@ class _WorkspaceState extends State<Workspace> {
   Future<void> apply() async {
     final plan = <int, Recipe>{
       for (var i = 1; i <= 7; i++)
-        if (assigned(i) != null) i: assigned(i)!,
+        if (pending(i)) i: assigned(i)!,
     };
     if (plan.isEmpty) return;
     if (!await confirm(
@@ -1187,7 +1201,10 @@ class _WorkspaceState extends State<Workspace> {
                 [
                   if (cameraSlots[slot] != null)
                     '카메라 · ${cameraSlots[slot]!.film}',
-                  if (assigned(slot) != null) '전송 대기 → ${assigned(slot)!.name}',
+                  if (assigned(slot) != null)
+                    pending(slot)
+                        ? '전송 대기 → ${assigned(slot)!.name}'
+                        : '적용됨 · ${assigned(slot)!.name}',
                   if (assigned(slot) == null && cameraSlots[slot] != null)
                     '눌러서 이름·설정 편집',
                 ].join('\n'),
@@ -1205,11 +1222,15 @@ class _WorkspaceState extends State<Workspace> {
         ),
       const SizedBox(height: 20),
       FilledButton.icon(
-        onPressed: busy || camera.identity == null || slots.isEmpty
+        onPressed: busy || camera.identity == null || pendingCount == 0
             ? null
             : apply,
         icon: const Icon(Icons.sync),
-        label: Text('${slots.length}개 슬롯 일괄 적용'),
+        label: Text(
+          slots.isNotEmpty && pendingCount == 0
+              ? '배치한 레시피가 모두 적용됨'
+              : '$pendingCount개 슬롯 일괄 적용',
+        ),
       ),
       const SizedBox(height: 16),
       const Text(
