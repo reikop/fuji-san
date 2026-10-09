@@ -3,6 +3,7 @@ import 'camera/camera.dart';
 import 'domain/recipe.dart';
 import 'wb_shift_grid.dart';
 import 'film_icon.dart';
+import 'error_reporting.dart';
 
 class CameraSlotEditor extends StatefulWidget {
   const CameraSlotEditor({
@@ -41,8 +42,17 @@ class _CameraSlotEditorState extends State<CameraSlotEditor> {
       final edit = SlotEdit(name.text, values);
       if (edit.changes(widget.snapshot).isNotEmpty) await widget.onSave(edit);
       if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) setState(() => error = '$e');
+    } catch (e, stack) {
+      if (mounted) {
+        setState(() {
+          error = '$e';
+          saving = false;
+        });
+        await showErrorReport(
+          context,
+          ErrorReport.capture(e, stack, 'C${widget.snapshot.slot} 레시피 저장 실패'),
+        );
+      }
     } finally {
       if (mounted) setState(() => saving = false);
     }

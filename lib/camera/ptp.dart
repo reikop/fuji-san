@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
+import '../diagnostic_log.dart';
 
 Uint8List u16(int n) =>
     (ByteData(2)..setUint16(0, n & 0xffff, Endian.little)).buffer.asUint8List();
@@ -100,15 +101,30 @@ class NativeTransport implements CameraTransport {
   bool managed = false, opened = false, _busy = false;
   int transaction = 0;
   Uint8List _buffer = Uint8List(0);
-  Future<List<Map<String, dynamic>>> discover() async =>
-      (await channel.invokeListMethod<dynamic>('discover') ?? [])
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+  Future<List<Map<String, dynamic>>> discover() async {
+    DiagnosticLog.instance.camera.clear();
+    DiagnosticLog.instance.add('usb', 'discover started');
+    final devices = (await channel.invokeListMethod<dynamic>('discover') ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    for (final device in devices) {
+      DiagnosticLog.instance.protect('${device['id']}');
+    }
+    DiagnosticLog.instance.add('usb', 'discover count=${devices.length}');
+    return devices;
+  }
+
   Future<void> open(String id) async {
+    DiagnosticLog.instance.protect(id);
+    DiagnosticLog.instance.camera['transport'] = id.startsWith('wpd:')
+        ? 'WPD'
+        : 'USB';
+    DiagnosticLog.instance.add('usb', 'connect started');
     final result = await channel.invokeMapMethod<String, dynamic>('connect', {
       'id': id,
     });
     managed = result?['managedSession'] == true;
+    DiagnosticLog.instance.add('usb', 'connect managedSession=$managed');
     opened = true;
     transaction = 0;
     _buffer = Uint8List(0);
@@ -165,6 +181,11 @@ class NativeTransport implements CameraTransport {
   }) async {
     if (!opened || _busy) throw StateError('USB 세션이 없거나 사용 중입니다.');
     _busy = true;
+    final elapsed = Stopwatch()..start();
+    DiagnosticLog.instance.add(
+      'ptp',
+      'begin op=0x${code.toRadixString(16)} params=${params.map((p) => '0x${p.toRadixString(16)}').join(',')} writeBytes=${outgoing?.length ?? 0}',
+    );
     try {
       final id = transaction++;
       final p = ByteData(params.length * 4);
@@ -201,14 +222,20 @@ class NativeTransport implements CameraTransport {
       if (response.type != 3 || response.transaction != id) {
         throw const FormatException('PTP response mismatch');
       }
+      DiagnosticLog.instance.add(
+        'ptp',
+        'response op=0x${code.toRadixString(16)} code=0x${response.code.toRadixString(16)} bytes=${data.length} elapsedMs=${elapsed.elapsedMilliseconds}',
+      );
       if (response.code != 0x2001) {
         throw PtpResponseException(response.code, code);
       }
       return data;
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      DiagnosticLog.instance.add('usb-error', '$e');
       await _invalidate();
       rethrow;
-    } on FormatException {
+    } on FormatException catch (e) {
+      DiagnosticLog.instance.add('protocol-error', '$e');
       await _invalidate();
       rethrow;
     } finally {

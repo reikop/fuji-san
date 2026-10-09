@@ -107,6 +107,9 @@ void main() {
         await tester.enterText(find.byType(TextField), 'New Name');
         await tester.tap(find.text('카메라에 저장'));
         await tester.pumpAndSettle();
+        expect(find.text('오류 보고'), findsOneWidget);
+        await tester.tap(find.text('닫기'));
+        await tester.pumpAndSettle();
         expect(submitted!.name, 'New Name');
         expect(submitted!.values[0xd190], 300);
         expect(find.text('New Name'), findsOneWidget);

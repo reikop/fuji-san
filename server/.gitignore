@@ -1,0 +1,4 @@
+config.php
+private/*
+!private/.htaccess
+!private/index.php

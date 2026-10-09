@@ -15,6 +15,8 @@ import 'camera_slot_editor.dart';
 import 'wb_shift_grid.dart';
 import 'builtin_recipes.dart';
 import 'film_icon.dart';
+import 'diagnostic_log.dart';
+import 'error_reporting.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 Future<void> main(List<String> arguments) async {
@@ -28,7 +30,43 @@ Future<void> main(List<String> arguments) async {
   if (arguments.length == 2 && arguments.first == '--diagnose-write-back') {
     exit(await diagnoseCamera(arguments[1], writeBack: true));
   }
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    presentUnhandled(details.exception, details.stack ?? StackTrace.current);
+  };
+  WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+    presentUnhandled(error, stack);
+    return true;
+  };
   runApp(const FujiSanApp());
+}
+
+final appNavigator = GlobalKey<NavigatorState>();
+bool unhandledReportOpen = false;
+String? lastUnhandled;
+DateTime? lastUnhandledAt;
+void presentUnhandled(Object error, StackTrace stack) {
+  if (unhandledReportOpen) return;
+  if (lastUnhandled == '$error' &&
+      lastUnhandledAt != null &&
+      DateTime.now().difference(lastUnhandledAt!).inSeconds < 60) {
+    return;
+  }
+  lastUnhandled = '$error';
+  lastUnhandledAt = DateTime.now();
+  unhandledReportOpen = true;
+  final report = ErrorReport.capture(error, stack, '처리되지 않은 앱 오류');
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final context = appNavigator.currentContext;
+    try {
+      if (context != null && context.mounted) {
+        await showErrorReport(context, report);
+      }
+    } finally {
+      unhandledReportOpen = false;
+    }
+  });
+  WidgetsBinding.instance.scheduleFrame();
 }
 
 const ink = Color(0xff222b27),
@@ -40,6 +78,7 @@ class FujiSanApp extends StatelessWidget {
   final LibraryStore? store;
   @override
   Widget build(BuildContext context) => MaterialApp(
+    navigatorKey: appNavigator,
     debugShowCheckedModeBanner: false,
     title: 'Fuji San',
     theme: ThemeData(
@@ -211,6 +250,7 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   Future<void> _load() async {
+    ErrorReport? loadFailure;
     try {
       final data = await store.load();
       if (data != null) {
@@ -230,13 +270,25 @@ class _WorkspaceState extends State<Workspace> {
       }
       loaded = true;
       status = '카메라를 연결하고 나만의 일곱 가지 색을 준비하세요.';
-    } catch (e) {
+    } catch (e, stack) {
       status = '저장된 파일을 읽지 못했습니다. 원본을 보존했습니다. $e';
+      loadFailure = ErrorReport.capture(e, stack, '라이브러리 읽기 실패');
     }
     if (mounted) setState(() => busy = false);
+    if (mounted && loadFailure != null) {
+      await showErrorReport(context, loadFailure);
+    }
   }
 
   void report(String message) {
+    for (final recipe in recipes) {
+      DiagnosticLog.instance.protect(recipe.name);
+      DiagnosticLog.instance.protect(recipe.cameraName);
+    }
+    for (final snapshot in cameraSlots.values) {
+      DiagnosticLog.instance.protect(snapshot.rawName);
+    }
+    DiagnosticLog.instance.add('action', message);
     if (mounted) setState(() => status = message);
   }
 
@@ -245,7 +297,8 @@ class _WorkspaceState extends State<Workspace> {
     setState(() => busy = true);
     try {
       await action();
-    } catch (e) {
+    } catch (e, stack) {
+      final failure = ErrorReport.capture(e, stack, status);
       report('완료하지 못했습니다: $e');
       if (!transport.opened) {
         camera.identity = null;
@@ -253,9 +306,8 @@ class _WorkspaceState extends State<Workspace> {
         slotsReadAt = null;
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), duration: const Duration(seconds: 8)),
-        );
+        setState(() => busy = false);
+        await showErrorReport(context, failure);
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -577,10 +629,13 @@ class _WorkspaceState extends State<Workspace> {
         }, report);
         await refreshSlots();
         report('${plan.length}개 슬롯 적용 및 읽기 검증 완료');
-      } catch (e) {
+      } catch (e, stack) {
         cameraSlots = {};
         slotsReadAt = null;
-        throw StateError('전송 중단. 일부 설정이 적용되었을 수 있습니다. 백업 메뉴에서 복원하세요. $e');
+        Error.throwWithStackTrace(
+          StateError('전송 중단. 일부 설정이 적용되었을 수 있습니다. 백업 메뉴에서 복원하세요. $e'),
+          stack,
+        );
       }
     });
   }
@@ -820,6 +875,21 @@ class _WorkspaceState extends State<Workspace> {
         title: Text(checkingUpdate ? '새 버전 확인 중' : '앱 업데이트'),
         subtitle: Text(updateStatus),
         onTap: checkingUpdate || busy ? null : checkUpdates,
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.bug_report_outlined),
+        title: const Text('오류 / 문제 보고'),
+        onTap: busy
+            ? null
+            : () => showErrorReport(
+                context,
+                ErrorReport.capture(
+                  '사용자가 직접 작성한 문제 보고',
+                  StackTrace.empty,
+                  '문제 보고',
+                ),
+              ),
       ),
       if (update != null)
         FilledButton.tonal(

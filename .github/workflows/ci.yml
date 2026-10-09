@@ -25,6 +25,12 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib test tool
       - run: flutter analyze
       - run: flutter test
+      - name: Test PHP error reporting service
+        run: |
+          php -l server/common.php
+          php -l server/report.php
+          php -l server/admin.php
+          php server/tests.php
   build:
     timeout-minutes: 30
     strategy:

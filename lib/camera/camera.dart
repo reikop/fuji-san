@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import '../domain/recipe.dart';
 import 'ptp.dart';
+import '../diagnostic_log.dart';
 
 class CameraIdentity {
   CameraIdentity(this.model, this.firmware, this.serial, this.properties);
@@ -85,6 +86,15 @@ class FujiCamera implements RecipeCamera {
         model = r.string(),
         firmware = r.string(),
         serial = r.string();
+    DiagnosticLog.instance.protect(serial);
+    DiagnosticLog.instance.camera.addAll({
+      'model': DiagnosticLog.instance.redact(model, max: 25),
+      'firmware': DiagnosticLog.instance.redact(firmware, max: 25),
+    });
+    DiagnosticLog.instance.add(
+      'camera',
+      'deviceInfo ops=${ops.map((p) => p.toRadixString(16)).join(',')} properties=${props.map((p) => p.toRadixString(16)).join(',')}',
+    );
     if (!manufacturer.toUpperCase().contains('FUJI') ||
         model.toUpperCase() != 'X100VI') {
       throw StateError('이 버전은 FUJIFILM X100VI 전용입니다. 감지: $manufacturer $model');
